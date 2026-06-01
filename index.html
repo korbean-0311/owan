@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>오운완 - 오늘의 운동 완료</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0e1116" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="오운완" />
+<style>
+  :root{
+    --bg:#0e1116;
+    --surface:#171b22;
+    --surface-2:#1f242d;
+    --line:#2a313c;
+    --text:#f2f5f8;
+    --text-dim:#9aa4b2;
+    --text-mute:#69727f;
+    --accent:#39e08a;
+    --accent-press:#2bc176;
+    --danger:#ff5b6e;
+    --warn:#ffb340;
+    --blue:#5ab0ff;
+    --gold:#ffd24a;
+    --shadow:0 8px 28px rgba(0,0,0,.45);
+    --radius:18px;
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic",sans-serif;
+    background:#05070a;
+    color:var(--text);
+    display:flex; justify-content:center; align-items:center;
+    min-height:100vh; padding:24px 0;
+  }
+
+  /* ── 모바일 프레임 ─────────────── */
+  .phone{
+    width:390px; height:844px; background:var(--bg);
+    border-radius:42px; border:10px solid #000; box-shadow:var(--shadow);
+    position:relative; overflow:hidden; display:flex; flex-direction:column;
+  }
+  .notch{position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:150px; height:28px; background:#000;
+    border-bottom-left-radius:16px; border-bottom-right-radius:16px; z-index:50;}
+  .statusbar{height:46px; flex:0 0 46px; display:flex; align-items:center;
+    justify-content:space-between; padding:6px 24px 0 26px; font-size:13px; font-weight:600;}
+  .statusbar .right{display:flex; gap:6px; align-items:center; font-size:12px;}
+
+  .screens{flex:1; position:relative; overflow:hidden;}
+  .screen{position:absolute; inset:0; display:flex; flex-direction:column;
+    opacity:0; pointer-events:none; transform:translateX(12px);
+    transition:opacity .22s ease, transform .22s ease; overflow:hidden;}
+  .screen.active{opacity:1; pointer-events:auto; transform:none;}
+  .scroll{flex:1; overflow-y:auto; padding:8px 20px 24px;}
+  .scroll::-webkit-scrollbar{width:0;}
+
+  /* ── 공통 ─────────────── */
+  .header{padding:14px 20px 6px;}
+  .header h1{margin:0; font-size:22px; letter-spacing:-.4px;}
+  .header .sub{margin:3px 0 0; color:var(--text-dim); font-size:13px;}
+
+  .card{background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:18px; margin-bottom:14px;}
+  .card.tight{padding:14px;}
+  .row{display:flex; align-items:center; justify-content:space-between;}
+  .muted{color:var(--text-dim);}
+  .mute2{color:var(--text-mute);}
+  .small{font-size:12px;}
+  .pill{display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600;
+    padding:5px 10px; border-radius:999px; background:var(--surface-2); color:var(--text-dim);}
+  .pill.accent{background:rgba(57,224,138,.14); color:var(--accent);}
+  .pill.danger{background:rgba(255,91,110,.14); color:var(--danger);}
+  .pill.warn{background:rgba(255,179,64,.16); color:var(--warn);}
+  .pill.blue{background:rgba(90,176,255,.16); color:var(--blue);}
+
+  .btn{display:flex; align-items:center; justify-content:center; gap:8px; width:100%;
+    border:none; border-radius:14px; padding:16px; font-size:16px; font-weight:700;
+    background:var(--accent); color:#04130c; cursor:pointer;
+    transition:transform .06s ease, background .15s ease;}
+  .btn:active{transform:scale(.98); background:var(--accent-press);}
+  .btn.ghost{background:var(--surface-2); color:var(--text);}
+  .btn.outline{background:transparent; border:1px solid var(--line); color:var(--text);}
+  .btn.sm{padding:11px 16px; font-size:14px; width:auto; border-radius:11px;}
+
+  input.field{width:100%; border:1px solid var(--line); background:var(--surface-2);
+    color:var(--text); border-radius:13px; padding:15px 16px; font-size:16px; outline:none;}
+  input.field:focus{border-color:var(--accent);}
+  label.lbl{display:block; font-size:13px; color:var(--text-dim); margin:0 0 8px 2px;}
+
+  /* ── 온보딩 ─────────────── */
+  .onb{flex:1; display:flex; flex-direction:column; padding:36px 26px 30px;}
+  .onb .logo{font-size:40px; font-weight:800; letter-spacing:-1px; margin-top:30px;}
+  .onb .logo span{color:var(--accent);}
+  .onb .tag{color:var(--text-dim); margin-top:8px; font-size:15px; line-height:1.5;}
+  .onb .spacer{flex:1;}
+  .onb-step{display:none;}
+  .onb-step.active{display:flex; flex-direction:column; flex:1;}
+
+  .goal-opt{border:1.5px solid var(--line); border-radius:16px; padding:18px;
+    margin-bottom:12px; cursor:pointer; transition:border-color .15s, background .15s;}
+  .goal-opt.sel{border-color:var(--accent); background:rgba(57,224,138,.08);}
+  .goal-opt .row{align-items:baseline;}
+  .goal-opt .n{font-size:20px; font-weight:800;}
+  .goal-opt .fine{font-size:13px; margin-top:6px;}
+
+  /* ── 홈 헤더 (재디자인) ─────────────── */
+  .home-head{
+    position:absolute; top:0; left:0; right:0; z-index:20;
+    padding:16px 20px 12px;
+    background:rgba(20,24,30,.6);
+    backdrop-filter:blur(16px) saturate(150%);
+    -webkit-backdrop-filter:blur(16px) saturate(150%);
+    border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .screen[data-screen="home"] .scroll{padding-top:90px;}
+  .home-head .eyebrow{font-size:12px; color:var(--text-dim); font-weight:600; letter-spacing:.2px;}
+  .home-head h1{margin:2px 0 0; font-size:24px;}
+  .home-head h1 .suffix{font-size:15px; font-weight:500; color:var(--text-dim); margin-left:2px;}
+  .head-avatar{width:44px; height:44px; border-radius:50%; flex:0 0 44px;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; color:#04130c;}
+
+  /* ── 시즌바 ─────────────── */
+  .season-bar{display:flex; gap:5px; margin:14px 0 4px;}
+  .wk{flex:1; height:7px; border-radius:4px; background:var(--surface-2);}
+  .wk.done{background:var(--accent);}
+  .wk.fail{background:var(--danger);}
+  .wk.cur{background:var(--blue); animation:blink 1.1s ease-in-out infinite;}
+  .wk.exempt{background:#49515f;}
+  @keyframes blink{0%,100%{opacity:1;} 50%{opacity:.32;}}
+  .verify-tag.gray{background:rgba(154,164,178,.18); color:var(--text-dim);}
+
+  .chip-sel{display:flex; flex-wrap:wrap; gap:8px;}
+  .chip{padding:8px 13px; border-radius:999px; border:1.5px solid var(--line);
+    background:var(--surface-2); font-size:13px; font-weight:600; cursor:pointer; color:var(--text-dim);}
+  .chip.on{border-color:var(--accent); background:rgba(57,224,138,.12); color:var(--accent);}
+
+  .progress-ring{display:flex; align-items:center; gap:18px;}
+  .ring{position:relative; width:104px; height:104px; flex:0 0 104px;}
+  .ring svg{transform:rotate(-90deg);}
+  .ring .cnt{position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;}
+  .ring .cnt b{font-size:26px;}
+  .ring .cnt small{font-size:11px; color:var(--text-dim);}
+
+  .stat{display:flex; flex-direction:column; gap:3px;}
+  .stat .big{font-size:26px; font-weight:800;}
+  .stat .big.danger{color:var(--danger);}
+
+  .check-dots{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
+  .dot{width:34px; height:34px; border-radius:50%; border:2px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--text-mute);}
+  .dot.on{background:var(--accent); border-color:var(--accent); color:#04130c; font-weight:800;}
+
+  .banner{border-radius:14px; padding:14px; display:flex; gap:11px; align-items:flex-start;
+    margin-bottom:14px;}
+  .banner .ic{font-size:18px;}
+  .banner.bad{background:rgba(255,91,110,.10); border:1px solid rgba(255,91,110,.35);}
+  .banner.good{background:rgba(57,224,138,.10); border:1px solid rgba(57,224,138,.32);}
+  .banner.neutral{background:var(--surface); border:1px solid var(--line);}
+  .banner .t{font-size:13px; line-height:1.5;}
+
+  /* ── 인증 업로드 ─────────────── */
+  .uploader{border:2px dashed var(--line); border-radius:18px; height:230px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; color:var(--text-dim); cursor:pointer; background:var(--surface);
+    overflow:hidden; position:relative;}
+  .uploader .ph{font-size:40px;}
+  .meta-card{border-radius:12px; padding:13px; font-size:13px; line-height:1.6; margin-top:14px;
+    border:1px solid var(--line); background:var(--surface);}
+  .meta-row{display:flex; justify-content:space-between; padding:3px 0;}
+
+  /* ── 피드 ─────────────── */
+  .feed-item{display:flex; gap:12px; align-items:center;}
+  .thumb{width:60px; height:60px; border-radius:13px; flex:0 0 60px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; font-size:24px; position:relative;}
+  .thumb .zoom{position:absolute; bottom:3px; right:3px; font-size:10px; background:rgba(0,0,0,.5);
+    border-radius:6px; padding:1px 4px;}
+  .avatar{width:40px; height:40px; border-radius:50%; flex:0 0 40px; display:flex;
+    align-items:center; justify-content:center; font-weight:700; font-size:15px; color:#04130c;}
+  .verify-tag{display:inline-flex; gap:4px; align-items:center; font-size:11px; font-weight:600;
+    padding:3px 8px; border-radius:999px;}
+  .verify-tag.ok{background:rgba(57,224,138,.14); color:var(--accent);}
+  .verify-tag.bad{background:rgba(255,179,64,.16); color:var(--warn);}
+
+  /* ── 랭킹 ─────────────── */
+  .rank-row{display:flex; align-items:center; gap:13px; padding:13px 4px; border-bottom:1px solid var(--line);}
+  .rank-row:last-child{border-bottom:none;}
+  .rank-no{width:26px; text-align:center; font-weight:800; font-size:16px; color:var(--text-dim);}
+  .rank-no.top{color:var(--gold);}
+  .rank-amt{font-weight:800; font-size:15px;}
+
+  /* ── 마이 ─────────────── */
+  .menu-row{display:flex; align-items:center; justify-content:space-between; padding:16px 4px;
+    border-bottom:1px solid var(--line); cursor:pointer;}
+  .menu-row:last-child{border-bottom:none;}
+  .switch{width:46px; height:27px; border-radius:999px; background:var(--surface-2); position:relative;
+    transition:background .2s; flex:0 0 46px;}
+  .switch.on{background:var(--accent);}
+  .switch .knob{position:absolute; top:3px; left:3px; width:21px; height:21px; border-radius:50%;
+    background:#fff; transition:transform .2s;}
+  .switch.on .knob{transform:translateX(19px);}
+
+  /* ── 주차별 기록 달력 ─────────────── */
+  .cal{display:flex; gap:6px;}
+  .day{flex:1; text-align:center;}
+  .day .dow{font-size:11px; color:var(--text-dim); margin-bottom:7px;}
+  .day .cell{height:44px; border-radius:11px; background:var(--surface-2);
+    display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; position:relative;}
+  .day .cell.done{background:var(--accent); color:#04130c;}
+  .day .cell.done::after{content:'✓'; position:absolute; bottom:2px; font-size:9px;}
+  .day .cell.today{outline:2px solid var(--blue); outline-offset:-2px;}
+  .day .cell.future{opacity:.35;}
+  .wk-result{display:flex; align-items:center; justify-content:space-between; padding:13px 4px; border-bottom:1px solid var(--line);}
+  .wk-result:last-child{border-bottom:none;}
+
+  /* ── 멤버 관리 ─────────────── */
+  .stepper{display:flex; align-items:center; gap:10px;}
+  .stepper button{width:32px; height:32px; border-radius:9px; border:none; background:var(--surface-2);
+    color:var(--text); font-size:18px; font-weight:700; cursor:pointer;}
+  .stepper .v{min-width:34px; text-align:center; font-weight:800; font-size:16px;}
+
+  /* ── 시즌 종료 ─────────────── */
+  .end-hero{text-align:center; padding:30px 0 10px;}
+  .end-hero .flag{font-size:50px;}
+  .end-hero h1{margin:10px 0 4px; font-size:26px;}
+
+  /* ── 탭바 ─────────────── */
+  .tabbar{flex:0 0 70px; display:flex; align-items:center; justify-content:space-around;
+    border-top:1px solid var(--line); background:rgba(20,24,30,.96); padding-bottom:6px;}
+  .tab{display:flex; flex-direction:column; align-items:center; gap:3px;
+    color:var(--text-mute); font-size:11px; cursor:pointer; flex:1; padding-top:8px;}
+  .tab .ic{font-size:21px;}
+  .tab.on{color:var(--accent);}
+  .tab.center .ic{width:50px; height:50px; margin-top:-22px; border-radius:50%;
+    background:var(--accent); color:#04130c; display:flex; align-items:center; justify-content:center;
+    font-size:30px; font-weight:300; line-height:1; box-shadow:0 6px 16px rgba(57,224,138,.4); border:4px solid var(--bg);}
+
+  /* ── 사진 뷰어 오버레이 ─────────────── */
+  .overlay{position:absolute; inset:0; background:rgba(5,7,10,.97); z-index:90;
+    display:flex; flex-direction:column; opacity:0; pointer-events:none; transition:opacity .2s;}
+  .overlay.show{opacity:1; pointer-events:auto;}
+  .ov-top{display:flex; justify-content:flex-end; padding:50px 22px 10px;}
+  .ov-close{font-size:20px; cursor:pointer; color:#fff; background:rgba(255,255,255,.12);
+    width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
+  .ov-photo{flex:0 0 320px; margin:0 22px; border-radius:18px; display:flex;
+    align-items:center; justify-content:center; font-size:90px;}
+  .ov-info{padding:18px 22px;}
+
+  /* ── 토스트 ─────────────── */
+  .toast-wrap{position:absolute; left:0; right:0; bottom:96px; display:flex; justify-content:center; z-index:100; pointer-events:none;}
+  .toast{background:#fff; color:#0e1116; font-weight:600; font-size:13px;
+    padding:13px 18px; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.4);
+    display:flex; gap:9px; align-items:center; max-width:330px;
+    transform:translateY(20px); opacity:0; transition:.28s;}
+  .toast.show{transform:none; opacity:1;}
+  .toast .kakao{background:#ffe812; color:#3a1d1d; border-radius:7px; padding:2px 6px; font-size:11px; font-weight:800;}
+
+  .hidden{display:none !important;}
+  .center-col{display:flex; flex-direction:column; align-items:center;}
+  .sec-title{font-size:14px; font-weight:700; color:var(--text-dim); margin:18px 2px 10px;}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr@7/dist/full.umd.js"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="statusbar"><span>9:41</span><span class="right">📶 🔋</span></div>
+
+  <div class="screens">
+
+    <!-- ════════ 온보딩 ════════ -->
+    <section class="screen active" data-screen="onboard">
+      <div class="onb">
+        <div class="onb-step active" data-step="0">
+          <div class="logo">오<span>운</span>완</div>
+          <div class="tag" style="margin-left:2px;">by WFL</div>
+          <div class="spacer"></div>
+          <label class="lbl">초대 코드</label>
+          <input class="field" id="inviteCode" placeholder="예: OWAN-XXXX-XXXX-XXXX" maxlength="24" style="text-align:center; letter-spacing:1px;"/>
+          <p class="mute2 small" style="margin:10px 2px 0;">초대받은 멤버만 입장할 수 있어요.</p>
+          <div class="spacer"></div>
+          <button class="btn" onclick="onbJoin()">코드로 참여하기</button>
+          <button class="btn outline" style="margin-top:10px;" onclick="onbCreate()">새 그룹 만들기 (방장)</button>
+          <button class="btn outline" style="margin-top:10px;" onclick="go('login')">이미 가입했어요? 로그인</button>
+        </div>
+
+        <div class="onb-step" data-step="1">
+          <div class="logo" style="font-size:28px; margin-top:20px;">계정 만들기 👋</div>
+          <div class="tag">닉네임과 비밀번호가 곧 로그인 정보예요.<br/>다음에 접속할 땐 이걸로 로그인해요.</div>
+          <div class="spacer"></div>
+          <label class="lbl">닉네임 <span class="mute2">(그룹 내 중복 불가)</span></label>
+          <input class="field" id="nickname" placeholder="예: 헬창민수" value="" maxlength="10"/>
+          <label class="lbl" style="margin-top:16px;">비밀번호</label>
+          <input class="field" type="password" id="password" placeholder="비밀번호 (6자 이상)"/>
+          <div class="spacer"></div>
+          <button class="btn" onclick="onbAccountNext()">다음</button>
+        </div>
+
+        <div class="onb-step" data-step="2">
+          <div class="logo" style="font-size:26px; margin-top:14px;">이번 시즌 목표</div>
+          <div class="tag"><span id="onbWeeks">8</span>주 동안 <b style="color:var(--text)">주당 운동 횟수</b>를 정하세요.<br/>시즌 중에는 바꿀 수 없어요!</div>
+          <div class="pill blue" style="margin-top:14px;">🗓 시즌 <span id="onbSeasonNo">1</span> · <span id="onbSeasonRange"></span> 시작</div>
+          <div style="height:18px;"></div>
+          <div class="goal-opt" data-goal="3" onclick="pickGoal(3)">
+            <div class="row"><span class="n">주 3회</span><span class="pill danger">미달 시 3,000원</span></div>
+            <div class="fine muted">가장 가볍게 시작하기</div>
+          </div>
+          <div class="goal-opt sel" data-goal="4" onclick="pickGoal(4)">
+            <div class="row"><span class="n">주 4회</span><span class="pill warn">미달 시 2,000원</span></div>
+            <div class="fine muted">적당히 빡세게 · 벌금 절약</div>
+          </div>
+          <div class="goal-opt" data-goal="5" onclick="pickGoal(5)">
+            <div class="row"><span class="n">주 5회</span><span class="pill accent">미달 시 1,000원</span></div>
+            <div class="fine muted">진짜 헬창 · 벌금 최소</div>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn" onclick="finishOnboard()">시즌 시작하기</button>
+        </div>
+
+        <!-- step 3: 그룹 생성 설정 (방장) -->
+        <div class="onb-step" data-step="3">
+          <div class="logo" style="font-size:26px; margin-top:14px;">새 그룹 만들기</div>
+          <div class="tag">당신이 <b style="color:var(--text)">방장</b>이 돼요. 그룹 설정을 정하세요.</div>
+          <div style="height:18px;"></div>
+          <label class="lbl">그룹 이름</label>
+          <input class="field" id="cgName" placeholder="예: 오운완 모임" maxlength="20"/>
+          <label class="lbl" style="margin-top:14px;">정원 (최대 인원)</label>
+          <input class="field" id="cgCap" type="number" value="8" min="2" max="50"/>
+          <label class="lbl" style="margin-top:14px;">시즌 시작 날짜</label>
+          <input class="field" id="cgStart" type="date" value="2026-06-01"/>
+          <label class="lbl" style="margin-top:14px;">진행 주차 수</label>
+          <input class="field" id="cgWeeks" type="number" value="8" min="1" max="52"/>
+          <div class="spacer"></div>
+          <button class="btn" onclick="onbCreateNext()">다음</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ 로그인 (재접속) ════════ -->
+    <section class="screen" data-screen="login">
+      <div class="onb">
+        <div class="logo" style="margin-top:24px;">오<span>운</span>완</div>
+        <div class="tag">다시 오셨네요! 로그인해주세요.</div>
+        <div class="spacer"></div>
+        <label class="lbl">닉네임</label>
+        <input class="field" id="loginNick" placeholder="닉네임" maxlength="10"/>
+        <label class="lbl" style="margin-top:16px;">비밀번호</label>
+        <input class="field" type="password" id="loginPw" placeholder="비밀번호"/>
+        <p class="mute2 small" style="margin:10px 2px 0;">초대코드는 처음 가입할 때만 필요해요.</p>
+        <div class="spacer"></div>
+        <button class="btn" onclick="doLogin()">로그인</button>
+        <button class="btn outline" style="margin-top:10px;" onclick="backToOnboard()">처음 가입하기</button>
+      </div>
+    </section>
+
+    <!-- ════════ 홈 ════════ -->
+    <section class="screen" data-screen="home">
+      <div class="home-head">
+        <div class="row">
+          <div>
+            <div class="eyebrow">시즌 <span id="hSeasonNo">1</span> · <span id="hWeekRange">3주차</span></div>
+            <h1 id="hNick">헬창민수<span class="suffix">님</span></h1>
+          </div>
+          <div class="row" style="gap:10px;">
+            <span class="pill accent" id="hGoalPill">주 4회</span>
+            <div class="head-avatar" id="hAvatar" style="background:var(--gold)">헬</div>
+          </div>
+        </div>
+      </div>
+      <div class="scroll">
+
+        <div class="card">
+          <div class="row"><span class="muted small">시즌 진행</span><span class="mute2 small" id="hWeekDates"></span></div>
+          <div class="season-bar" id="seasonBar"></div>
+        </div>
+
+        <div class="card">
+          <div class="progress-ring">
+            <div class="ring">
+              <svg width="104" height="104">
+                <circle cx="52" cy="52" r="46" stroke="#242b35" stroke-width="10" fill="none"/>
+                <circle id="ringFg" cx="52" cy="52" r="46" stroke="var(--accent)" stroke-width="10" fill="none"
+                        stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="145"/>
+              </svg>
+              <div class="cnt"><b id="ringCnt">2/4</b><small>이번 주</small></div>
+            </div>
+            <div style="flex:1;">
+              <div class="muted small" id="ringLabel">이번 주 인증</div>
+              <div style="font-size:15px; margin-top:4px;" id="ringRemain">목표까지 <b style="color:var(--accent)" id="remainCnt">2회</b> 남음</div>
+              <div class="check-dots" id="checkDots"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="gap:14px; margin-bottom:14px;">
+          <div class="card tight" style="flex:1; margin:0;">
+            <div class="stat"><span class="muted small">누적 벌금</span><span class="big danger" id="homeFine">6,000원</span></div>
+          </div>
+          <div class="card tight" style="flex:1; margin:0;">
+            <div class="stat"><span class="muted small">현재 순위</span><span class="big">3<span style="font-size:15px; color:var(--text-dim)">위</span></span></div>
+          </div>
+        </div>
+
+        <div id="streakBanner"></div>
+
+        <div class="card" id="leverageCard"></div>
+
+        <button class="btn" onclick="go('certify')">📸 오운완 인증하기</button>
+      </div>
+    </section>
+
+    <!-- ════════ 인증 업로드 ════════ -->
+    <section class="screen" data-screen="certify">
+      <div class="header">
+        <div class="row"><span class="btn outline sm" onclick="go('home')">‹ 뒤로</span><span></span></div>
+        <h1 style="margin-top:8px;">오운완 인증</h1>
+        <p class="sub">사진을 올리면 단톡방에 자동 공유되고, 멤버 승인 후 완료돼요.</p>
+      </div>
+      <div class="scroll">
+        <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handleFile(event)"/>
+        <div class="uploader" id="uploader" onclick="document.getElementById('photoInput').click()">
+          <div class="ph" id="upPh">📷</div>
+          <div id="upTxt">탭해서 운동 사진 올리기</div>
+        </div>
+
+        <!-- 사진 메타데이터 자동 검증 -->
+        <div class="meta-card hidden" id="metaCard">
+          <div class="row" style="margin-bottom:6px;">
+            <b style="font-size:13px;">📷 사진 메타데이터</b>
+            <span class="verify-tag ok" id="metaVerdict">✓ 3주차 범위 내</span>
+          </div>
+          <div class="meta-row"><span class="muted">촬영 일시</span><span id="metaDate">2026.05.31 08:12</span></div>
+          <div class="meta-row"><span class="muted">현재 주차</span><span id="metaWeek">3주차 (5.25~5.31)</span></div>
+          <div class="mute2 small" style="margin-top:8px; line-height:1.5;" id="metaNote">촬영일이 이번 주차 안에 있어 유효한 인증이에요.</div>
+        </div>
+
+        <label class="lbl" style="margin-top:18px;">한마디 (선택)</label>
+        <input class="field" id="certifyMemo" placeholder="예: 오늘 하체 30분 🔥"/>
+
+        <div class="card" style="margin-top:18px;">
+          <div class="row" style="margin-bottom:8px;">
+            <span style="font-weight:700;">자동 공유 미리보기</span>
+            <span class="pill"><span style="color:#ffe812;">●</span> 단톡방</span>
+          </div>
+          <div style="background:var(--surface-2); border-radius:12px; padding:13px; font-size:13px; line-height:1.6; color:var(--text-dim);">
+            🏋️ <b style="color:var(--text)" id="shareNick">헬창민수</b>님이 오운완 인증 업로드 완료!<br/>
+            "인증 요청합니다 👀" · 멤버들의 승인을 기다려요
+          </div>
+        </div>
+
+        <button class="btn" id="submitCertify" onclick="submitCertify()">인증 요청 보내기</button>
+      </div>
+    </section>
+
+    <!-- ════════ 피드 ════════ -->
+    <section class="screen" data-screen="feed">
+      <div class="header"><h1>인증 피드</h1><p class="sub">썸네일을 탭하면 사진과 촬영 정보를 볼 수 있어요.</p></div>
+      <div class="scroll" id="feedList"></div>
+    </section>
+
+    <!-- ════════ 랭킹 ════════ -->
+    <section class="screen" data-screen="rank">
+      <div class="header"><h1>시즌 랭킹</h1></div>
+      <div class="scroll">
+        <div class="card center-col" style="padding-top:22px;">
+          <span class="muted small">우리 모임 누적 벌금</span>
+          <div style="font-size:34px; font-weight:800; margin-top:4px;" id="rankTotal">38,000원</div>
+          <span class="pill" style="margin-top:8px;">1인 누적 상한 10만원</span>
+        </div>
+        <div class="sec-title">전체 순위</div>
+        <div class="card" id="rankList" style="padding:6px 14px;"></div>
+      </div>
+    </section>
+
+    <!-- ════════ 마이 ════════ -->
+    <section class="screen" data-screen="me">
+      <div class="header"><h1>마이</h1></div>
+      <div class="scroll">
+        <div class="card" style="display:flex; align-items:center; gap:14px;">
+          <div class="head-avatar" style="background:var(--gold); width:52px; height:52px; flex:0 0 52px; font-size:21px;">헬</div>
+          <div>
+            <div style="font-size:17px; font-weight:700;" id="meNick">헬창민수</div>
+            <div class="mute2 small">초대코드 <span id="meCode">OWAN-····</span> · 시즌 <span id="meSeasonNo">1</span> 참여중</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="menu-row" onclick="toggleGoalPicker()"><span>이번 시즌 목표</span><span class="pill accent" id="meGoalPill">주 4회</span></div>
+          <div id="goalPicker" class="hidden" style="padding:4px 4px 10px;">
+            <div class="chip-sel">
+              <div class="chip" data-g="3" onclick="changeGoal(3)">주 3회</div>
+              <div class="chip" data-g="4" onclick="changeGoal(4)">주 4회</div>
+              <div class="chip" data-g="5" onclick="changeGoal(5)">주 5회</div>
+            </div>
+            <p class="mute2 small" style="margin:8px 2px 0;">목표는 1주차에만 변경할 수 있어요 (시즌 중 고정).</p>
+          </div>
+          <div class="menu-row" onclick="go('records')"><span>주차별 기록 보기</span><span class="mute2">›</span></div>
+          <div class="menu-row"><span>알림 설정</span><span class="mute2">›</span></div>
+        </div>
+
+        <!-- 방장 전용 (DB is_admin=true 일 때만 표시) -->
+        <div id="adminSection" class="hidden">
+          <div class="sec-title">초대코드 관리 <span class="pill blue" style="padding:2px 8px;">방장</span></div>
+          <div class="card">
+            <div class="muted small">현재 그룹 초대코드</div>
+            <div id="adminCode" style="font-size:19px; font-weight:800; letter-spacing:.5px; margin:8px 0 2px;">OWAN-····-····-····</div>
+            <div class="row" style="gap:10px; margin-top:14px;">
+              <button class="btn ghost sm" style="flex:1" onclick="copyCode()">📋 복사</button>
+              <button class="btn ghost sm" style="flex:1" onclick="shareCode()">단톡방 공유</button>
+            </div>
+            <div class="menu-row" style="margin-top:8px;">
+              <div><span>정원 (최대 인원)</span><div class="mute2 small">현재 <span id="capCount">6</span>명 입장</div></div>
+              <div class="stepper">
+                <button onclick="bumpCap(-1)">−</button>
+                <span class="v" id="capVal">8</span>
+                <button onclick="bumpCap(1)">＋</button>
+              </div>
+            </div>
+            <button class="btn outline" style="margin-top:14px;" onclick="regenCode()">🔄 코드 재발급</button>
+            <p class="mute2 small" style="margin-top:8px; line-height:1.5;">재발급하면 기존 코드는 즉시 무효화돼요. 아직 입장하지 않은 멤버에게만 새 코드를 공유하면 되고, 이미 입장한 멤버·기록은 영향 없어요.</p>
+          </div>
+
+          <div class="card">
+            <div class="menu-row" onclick="go('members')"><span>멤버 관리 (내보내기)</span><span class="mute2">›</span></div>
+            <div class="menu-row" onclick="go('exempt')"><span>개인 사정 면제 (주차)</span><span class="mute2">›</span></div>
+            <div class="menu-row" onclick="go('seasonEnd')"><span>시즌 종료 / 정산</span><span class="mute2">›</span></div>
+          </div>
+        </div>
+
+        <button class="btn outline" style="margin-top:6px;" onclick="logout()">로그아웃</button>
+      </div>
+    </section>
+
+    <!-- ════════ 시즌 종료 ════════ -->
+    <section class="screen" data-screen="seasonEnd">
+      <div class="scroll" style="padding-top:30px;">
+        <div class="end-hero">
+          <div class="flag">🏁</div>
+          <h1>시즌 1 종료!</h1>
+          <p class="muted" style="margin:0; font-size:14px;">8주간 정말 수고했어요 💪</p>
+        </div>
+
+        <div class="card center-col" style="padding:20px;">
+          <span class="muted small">최종 누적 벌금 (모임 전체)</span>
+          <div style="font-size:32px; font-weight:800; margin:4px 0;" id="endTotal">38,000원</div>
+        </div>
+
+        <div class="sec-title">최종 순위</div>
+        <div class="card" id="endRankList" style="padding:6px 14px;"></div>
+
+        <!-- 관리자: 새 시즌 시작 -->
+        <div id="adminStartBox" class="hidden">
+          <div class="banner neutral" style="margin-top:16px;">
+            <span class="ic">🛠</span>
+            <div class="t"><b>관리자 권한</b><br/><span class="muted">새 시즌을 시작하면 모든 멤버가 재접속 시 목표 선택 화면을 보게 돼요.</span></div>
+          </div>
+          <button class="btn" onclick="startNewSeason()">새 시즌 시작하기</button>
+        </div>
+        <!-- 일반 유저: 대기 -->
+        <div id="userWaitBox">
+          <div class="banner neutral" style="margin-top:16px;">
+            <span class="ic">⏳</span>
+            <div class="t"><b>새 시즌 대기 중</b><br/><span class="muted">관리자가 새 시즌을 시작하면 알림으로 알려드릴게요.</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════ 새 시즌 설정 (방장) ════════ -->
+    <section class="screen" data-screen="newSeason">
+      <div class="header">
+        <div class="row"><span class="btn outline sm" onclick="go('seasonEnd')">‹ 뒤로</span><span class="pill blue">🛠 방장 전용</span></div>
+        <h1 style="margin-top:8px;">새 시즌 설정</h1>
+        <p class="sub">시작 날짜와 진행 주차 수를 정하면 그 기준으로 달력이 동기화돼요.</p>
+      </div>
+      <div class="scroll">
+        <label class="lbl">시즌 시작 날짜</label>
+        <input class="field" type="date" id="nsDate" value="2026-06-01" oninput="renderSeasonPreview()"/>
+
+        <label class="lbl" style="margin-top:18px;">진행 주차 수</label>
+        <div class="row" style="gap:12px;">
+          <button class="btn ghost sm" style="width:52px; font-size:20px;" onclick="bumpWeeks(-1)">−</button>
+          <input class="field" type="number" id="nsWeeks" value="8" min="1" max="52" style="text-align:center;" oninput="renderSeasonPreview()"/>
+          <button class="btn ghost sm" style="width:52px; font-size:20px;" onclick="bumpWeeks(1)">＋</button>
+        </div>
+        <p class="mute2 small" style="margin:8px 2px 0;">기본 8주. 1주 단위로 자유롭게 설정하세요.</p>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="row" style="margin-bottom:10px;"><b>미리보기</b><span class="pill blue" id="nsTotalPill">시즌 2 · 8주</span></div>
+          <div class="meta-row"><span class="muted">시작</span><span id="nsStart">2026.06.01</span></div>
+          <div class="meta-row"><span class="muted">종료</span><span id="nsEnd">2026.07.26</span></div>
+          <div class="meta-row"><span class="muted">1주차</span><span id="nsWeek1">6.01~6.07</span></div>
+        </div>
+
+        <button class="btn" onclick="createSeason()">이 설정으로 시즌 개설</button>
+      </div>
+    </section>
+
+    <!-- ════════ 주차별 기록 (달력) ════════ -->
+    <section class="screen" data-screen="records">
+      <div class="header">
+        <div class="row"><span class="btn outline sm" onclick="go('me')">‹ 뒤로</span><span></span></div>
+        <h1 style="margin-top:8px;">주차별 기록</h1>
+        <p class="sub">이번 주에 운동한 날이 초록색으로 표시돼요.</p>
+      </div>
+      <div class="scroll">
+        <div class="card">
+          <div class="row" style="margin-bottom:14px;">
+            <b id="recWeekTitle">이번 주 · 3주차</b>
+            <span class="pill accent" id="recWeekRange">5.25~5.31</span>
+          </div>
+          <div class="cal" id="calWeek"></div>
+          <div class="mute2 small" style="margin-top:12px;" id="recSummary">이번 주 2/4회 운동했어요.</div>
+        </div>
+
+        <div class="sec-title">주차별 결과</div>
+        <div class="card" id="weekResults" style="padding:4px 14px;"></div>
+      </div>
+    </section>
+
+    <!-- ════════ 멤버 관리 (방장) ════════ -->
+    <section class="screen" data-screen="members">
+      <div class="header">
+        <div class="row"><span class="btn outline sm" onclick="go('me')">‹ 뒤로</span><span class="pill blue">🛠 방장 전용</span></div>
+        <h1 style="margin-top:8px;">멤버 관리</h1>
+        <p class="sub">멤버를 내보내면 정원이 한 칸 비어 새 멤버가 들어올 수 있어요.</p>
+      </div>
+      <div class="scroll">
+        <div class="card row" style="padding:16px 18px;">
+          <span class="muted small">현재 입장 인원</span>
+          <span class="pill" id="memCapPill">6 / 8명</span>
+        </div>
+        <div class="card" id="memberList" style="padding:6px 14px;"></div>
+      </div>
+    </section>
+
+    <!-- ════════ 개인 사정 면제 (방장) ════════ -->
+    <section class="screen" data-screen="exempt">
+      <div class="header">
+        <div class="row"><span class="btn outline sm" onclick="go('me')">‹ 뒤로</span><span class="pill blue">🛠 방장 전용</span></div>
+        <h1 style="margin-top:8px;">개인 사정 면제</h1>
+        <p class="sub">부상 등 사정이 있는 멤버의 특정 주차를 면제해요. 면제 주차는 벌금·누진에서 제외돼요.</p>
+      </div>
+      <div class="scroll">
+        <div class="card">
+          <label class="lbl">멤버 선택</label>
+          <div class="chip-sel" id="exMemberChips"></div>
+          <label class="lbl" style="margin-top:18px;">면제할 주차</label>
+          <div class="chip-sel" id="exWeekChips"></div>
+          <button class="btn" style="margin-top:20px;" onclick="applyExemption()">면제 적용</button>
+        </div>
+
+        <div class="sec-title">면제 내역</div>
+        <div class="card" id="exemptList" style="padding:6px 14px;"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- 사진 뷰어 -->
+  <div class="overlay" id="photoView">
+    <div class="ov-top"><div class="ov-close" onclick="closePhoto()">✕</div></div>
+    <div class="ov-photo" id="ovPhoto">🏋️</div>
+    <div class="ov-info">
+      <div class="row" style="margin-bottom:10px;">
+        <div><b id="ovName" style="font-size:16px;">김지은</b> <span class="mute2 small" id="ovAgo">방금</span></div>
+      </div>
+      <div class="muted" id="ovMemo" style="margin-bottom:14px;">아침 러닝 5km 🏃‍♀️</div>
+      <div class="meta-card" style="margin-top:0;">
+        <div class="row" style="margin-bottom:6px;">
+          <b style="font-size:13px;">📷 사진 메타데이터</b>
+          <span class="verify-tag ok" id="ovVerdict">✓ 3주차 범위 내</span>
+        </div>
+        <div class="meta-row"><span class="muted">촬영 일시</span><span id="ovDate">2026.05.31 07:14</span></div>
+        <div class="meta-row"><span class="muted">대상 주차</span><span id="ovWeek">3주차 (5.25~5.31)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 토스트 -->
+  <div class="toast-wrap"><div class="toast" id="toast"></div></div>
+
+  <!-- 탭바 -->
+  <nav class="tabbar" id="tabbar">
+    <div class="tab on" data-tab="home" onclick="go('home')"><span class="ic">🏠</span>홈</div>
+    <div class="tab" data-tab="rank" onclick="go('rank')"><span class="ic">🏆</span>랭킹</div>
+    <div class="tab center" data-tab="certify" onclick="go('certify')"><span class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5.5v13M5.5 12h13" stroke="#04130c" stroke-width="2.6" stroke-linecap="round"/></svg></span></div>
+    <div class="tab" data-tab="feed" onclick="go('feed')"><span class="ic">📋</span>피드</div>
+    <div class="tab" data-tab="me" onclick="go('me')"><span class="ic">👤</span>마이</div>
+  </nav>
+</div>
+
+<script>
+/* ──────── Supabase 클라이언트 ──────── */
+const db = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+var joiningGroup = null;   // 온보딩 중 가입할 그룹
+
+/* ──────── 달력 동기화 ──────── */
+var TODAY = new Date();                     // 실제 오늘
+var SEASON_START = new Date(2026,4,11);     // 시즌 시작일 (방장이 설정) ※ month 0-index
+var TOTAL_WEEKS = 8;                         // 시즌 진행 주차 수 (방장이 설정)
+var CURRENT_WEEK = 3;                        // 오늘이 속한 주차
+function computeCurrentWeek(){
+  var wk = Math.floor((TODAY - SEASON_START)/(7*86400000))+1;
+  return Math.min(Math.max(wk,1), TOTAL_WEEKS);
+}
+function fmtFull(d){ return d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0'); }
+function weekRange(wk){
+  var s = new Date(SEASON_START); s.setDate(s.getDate()+(wk-1)*7);
+  var e = new Date(s); e.setDate(e.getDate()+6);
+  return {s:s,e:e};
+}
+function fmtMD(d){ return (d.getMonth()+1)+'.'+d.getDate(); }
+function rangeLabel(wk){ var r=weekRange(wk); return fmtMD(r.s)+'~'+fmtMD(r.e); }
+function inWeek(date, wk){
+  var r=weekRange(wk);
+  var end=new Date(r.e.getFullYear(),r.e.getMonth(),r.e.getDate(),23,59,59);
+  return date>=r.s && date<=end;
+}
+
+/* ──────── mock 상태 ──────── */
+var state = { nickname:"", goal:4, done:0, isAdmin:false, leverageLeft:2, leverageActive:false, membershipId:null, groupId:null, myUid:null };
+
+var members = [];   // 그룹 멤버 (DB에서 로드)
+var feed = [];      // 인증 피드 (DB에서 로드)
+var COLORS = ['#39e08a','#5ab0ff','#ffd24a','#ff9f6e','#c69bff','#ff7aa8','#7ad9c0','#f6c177'];
+
+/* 사진 검증: 원본=메타데이터 판정 / 캡쳐=멤버 직접 확인 */
+function verifyPhoto(f){
+  if(f.type==='capture'){
+    return {cls:'bad', tag:'📷 캡쳐 사진 · 확인 필요',
+      dateText:'— (메타데이터 없음)',
+      note:'스크린샷·공유 이미지는 촬영 메타데이터가 없어요. 멤버가 직접 확인 후 승인해주세요.'};
+  }
+  var ok = inWeek(f.capture, CURRENT_WEEK);
+  return ok
+    ? {cls:'ok',  tag:'✓ 메타데이터 인증', dateText:fmtDateTime(f.capture), note:'촬영일이 이번 주차 안에 있어 자동 인증돼요.'}
+    : {cls:'bad', tag:'⚠ 이전 주차 사진', dateText:fmtDateTime(f.capture), note:'촬영일이 이번 주차를 벗어났어요. 멤버 확인이 필요해요.'};
+}
+function fmtDateTime(c){
+  if(!c) return '— (메타데이터 없음)';
+  return c.getFullYear()+'.'+String(c.getMonth()+1).padStart(2,'0')+'.'+String(c.getDate()).padStart(2,'0')+
+    ' '+String(c.getHours()).padStart(2,'0')+':'+String(c.getMinutes()).padStart(2,'0');
+}
+
+/* 주차 상태: done / fail / cur / exempt / "" (DB weekly_records 기반) */
+var weeks = [];
+
+/* ──────── 화면 전환 ──────── */
+function go(name){
+  document.querySelectorAll('.screen').forEach(function(s){ s.classList.toggle('active', s.dataset.screen===name); });
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('on', t.dataset.tab===name); });
+  document.getElementById('tabbar').classList.toggle('hidden', name==='onboard' || name==='login' || name==='seasonEnd' || name==='newSeason');
+  if(name==='home' || name==='rank') refreshGroup();
+  if(name==='feed') refreshFeed();
+  if(name==='seasonEnd') renderSeasonEnd();
+  if(name==='newSeason') renderSeasonPreview();
+  if(name==='records') renderRecords();
+  if(name==='members') loadGroupData().then(renderMembers);
+  if(name==='exempt') loadGroupData().then(renderExemptScreen);
+  if(name==='me') renderAdminUI();
+}
+
+/* ──────── 온보딩 ──────── */
+var onbStep = 0;
+var onbMode = 'join';       // 'join' | 'create'
+var createParams = null;    // 그룹 생성 설정
+
+// 초대코드로 참여
+async function onbJoin(){
+  var code = document.getElementById('inviteCode').value.trim();
+  if(!code){ toast('초대코드를 입력해주세요'); return; }
+  var res = await db.from('groups').select('*').eq('invite_code', code).maybeSingle();
+  if(res.error || !res.data){ toast('유효하지 않은 초대코드예요'); return; }
+  joiningGroup = res.data; onbMode = 'join';
+  applyGroupConfig(joiningGroup);
+  showOnbStep(1);
+}
+// 새 그룹 만들기 → 설정 단계로
+function onbCreate(){ onbMode = 'create'; showOnbStep(3); }
+function onbCreateNext(){
+  var name = document.getElementById('cgName').value.trim();
+  if(!name){ toast('그룹 이름을 입력해주세요'); return; }
+  createParams = {
+    name: name,
+    capacity: Math.min(Math.max(parseInt(document.getElementById('cgCap').value,10)||8, 2), 50),
+    season_start: document.getElementById('cgStart').value,
+    total_weeks: Math.min(Math.max(parseInt(document.getElementById('cgWeeks').value,10)||8, 1), 52)
+  };
+  var p=(createParams.season_start||'').split('-');
+  if(p.length===3){ SEASON_START=new Date(+p[0],+p[1]-1,+p[2]); }
+  TOTAL_WEEKS=createParams.total_weeks; SEASON_NO=1; CURRENT_WEEK=computeCurrentWeek();
+  showOnbStep(1);
+}
+// 닉네임 + 비밀번호 → 목표 단계로
+function onbAccountNext(){
+  var nv = document.getElementById('nickname').value.trim();
+  var pw = document.getElementById('password').value;
+  if(!nv){ toast('닉네임을 입력해주세요'); return; }
+  if(pw.length<6){ toast('비밀번호는 6자 이상으로 설정해주세요'); return; }
+  state.nickname = nv; state.password = pw;
+  showOnbStep(2);
+  document.getElementById('onbSeasonNo').textContent = SEASON_NO;
+  document.getElementById('onbWeeks').textContent = TOTAL_WEEKS;
+  document.getElementById('onbSeasonRange').textContent = fmtMD(weekRange(1).s)+' ('+TOTAL_WEEKS+'주)';
+}
+function applyGroupConfig(g){
+  state.groupId = g.id;
+  INVITE_CODE = g.invite_code;
+  CAP = g.capacity;
+  var p=(g.season_start||'').split('-');
+  if(p.length===3){ SEASON_START=new Date(+p[0],+p[1]-1,+p[2]); }
+  TOTAL_WEEKS=g.total_weeks; SEASON_NO=g.season_no;
+  CURRENT_WEEK=computeCurrentWeek();
+}
+function pickGoal(n){
+  state.goal = n;
+  document.querySelectorAll('.goal-opt').forEach(function(o){ o.classList.toggle('sel', +o.dataset.goal===n); });
+}
+async function finishOnboard(){
+  var email = state.nickname.toLowerCase()+'@owan.co';
+  var su = await db.auth.signUp({ email:email, password:state.password });
+  if(su.error){
+    toast(/already|registered/i.test(su.error.message) ? '이미 사용 중인 닉네임이에요' : '가입 실패: '+su.error.message);
+    return;
+  }
+  var rpc;
+  if(onbMode==='create'){
+    rpc = await db.rpc('create_group', {
+      p_name:createParams.name, p_nickname:state.nickname, p_capacity:createParams.capacity,
+      p_season_start:createParams.season_start, p_total_weeks:createParams.total_weeks, p_goal:state.goal
+    });
+  } else {
+    if(!joiningGroup){ toast('초대코드 확인부터 해주세요'); return; }
+    rpc = await db.rpc('join_group', { p_code:joiningGroup.invite_code, p_nickname:state.nickname, p_goal:state.goal });
+  }
+  if(rpc.error){ toast('처리 실패: '+rpc.error.message); return; }
+  await loadSession();
+  go('home');
+  toast(onbMode==='create' ? '그룹을 만들었어요! 초대코드를 친구에게 공유하세요 🎉'
+                           : '시즌 '+SEASON_NO+' 시작! 첫 오운완을 인증해보세요 💪');
+}
+function applyIdentity(){
+  var ini = state.nickname.charAt(0);
+  document.getElementById('hNick').innerHTML = state.nickname+'<span class="suffix">님</span>';
+  document.getElementById('hGoalPill').textContent = '주 '+state.goal+'회';
+  document.getElementById('hAvatar').textContent = ini;
+  document.getElementById('meNick').textContent = state.nickname;
+  document.getElementById('shareNick').textContent = state.nickname;
+  var mg=document.getElementById('meGoalPill'); if(mg) mg.textContent='주 '+state.goal+'회';
+}
+/* 목표 변경 (1주차에만 허용 — 시즌 중 고정 규칙) */
+function toggleGoalPicker(){
+  if(CURRENT_WEEK!==1){ toast('목표는 1주차에만 변경할 수 있어요 (시즌 중 고정)'); return; }
+  var p=document.getElementById('goalPicker');
+  p.classList.toggle('hidden');
+  document.querySelectorAll('#goalPicker .chip').forEach(function(c){ c.classList.toggle('on', +c.dataset.g===state.goal); });
+}
+async function changeGoal(g){
+  if(CURRENT_WEEK!==1){ toast('목표는 1주차에만 변경할 수 있어요'); return; }
+  var r=await db.rpc('set_my_goal',{ p_group_id:state.groupId, p_goal:g });
+  if(r.error){ toast('목표 변경 실패: '+r.error.message); return; }
+  state.goal=g; applyIdentity();
+  document.querySelectorAll('#goalPicker .chip').forEach(function(c){ c.classList.toggle('on', +c.dataset.g===g); });
+  await refreshGroup();
+  toast('이번 시즌 목표를 주 '+g+'회로 정했어요');
+}
+
+/* 재접속 로그인 (닉네임+비밀번호 = 계정) */
+async function doLogin(){
+  var nv=document.getElementById('loginNick').value.trim();
+  var pw=document.getElementById('loginPw').value;
+  if(!nv || !pw){ toast('닉네임과 비밀번호를 입력해주세요'); return; }
+  var email=nv.toLowerCase()+'@owan.co';
+  var r=await db.auth.signInWithPassword({ email:email, password:pw });
+  if(r.error){ toast('로그인 실패 · 닉네임/비밀번호를 확인해주세요'); return; }
+  await loadSession();
+  go('home');
+  toast(state.nickname+'님, 다시 오셨네요! 👋');
+}
+function backToOnboard(){ onbStep=0; showOnbStep(0); go('onboard'); }
+function showOnbStep(n){
+  document.querySelectorAll('.onb-step').forEach(function(s){ s.classList.toggle('active', +s.dataset.step===n); });
+}
+async function logout(){
+  await db.auth.signOut();          // 토큰 삭제 → 다음 접속 시 로그인 화면
+  document.getElementById('loginNick').value='';
+  document.getElementById('loginPw').value='';
+  go('login');
+  toast('로그아웃됐어요');
+}
+
+/* 현재 세션 불러오기 → 프로필·멤버십·그룹 설정 반영 */
+async function loadSession(){
+  var u=await db.auth.getUser();
+  if(!u.data || !u.data.user) return false;
+  var uid=u.data.user.id; state.myUid=uid;
+  var pr=await db.from('profiles').select('*').eq('id',uid).maybeSingle();
+  var mr=await db.from('memberships').select('*, groups(*)').eq('profile_id',uid).maybeSingle();
+  if(pr.data) state.nickname=pr.data.nickname;
+  if(mr.data){
+    state.membershipId=mr.data.id;
+    state.goal=mr.data.weekly_goal;
+    state.isAdmin=mr.data.is_admin;
+    state.leverageLeft=mr.data.leverage_left;
+    if(mr.data.groups) applyGroupConfig(mr.data.groups);
+  }
+  applyIdentity();
+  await refreshGroup();
+  await refreshFeed();
+  renderInviteCode(); renderAdminUI();
+  return true;
+}
+
+/* 방식 C: 주차 기록에서 벌금·주차상태를 즉석 계산
+   - 미달성 주차마다 벌금, 연속 실패 시 2배씩 누진
+   - 면제(exempt) 주차는 건너뜀(중립)
+   - 레버리지 주차는 다음 주와 합산(2×목표)으로 판정
+   - 누적 상한 10만원 */
+function deriveSeason(recs, goal, curWeek, total){
+  var base = goal===3?3000 : goal===4?2000 : 1000;
+  var fine=0, streak=0, status={};
+  var w=1;
+  while(w<curWeek){               // 지난(마감된) 주차만 정산
+    var r=recs[w]||{};
+    if(r.status==='exempt'){ status[w]='exempt'; w++; continue; }
+    if(r.leveraged){
+      var r2=recs[w+1]||{};
+      if(w+1<curWeek){            // 두 주 모두 마감 → 합산 판정
+        var pass=((r.done_count||0)+(r2.done_count||0)) >= goal*2;
+        if(pass){ status[w]='done'; status[w+1]='done'; streak=0; }
+        else { streak++; fine+=base*Math.pow(2,streak-1); status[w]='fail';
+               streak++; fine+=base*Math.pow(2,streak-1); status[w+1]='fail'; }
+        w+=2; continue;
+      } else { status[w]='cur'; break; }   // 짝 주차가 진행중 → 보류
+    }
+    if((r.done_count||0) >= goal){ status[w]='done'; streak=0; }
+    else { streak++; fine+=base*Math.pow(2,streak-1); status[w]='fail'; }
+    w++;
+  }
+  fine=Math.min(fine, FINE_CAP);
+  var arr=[];
+  for(var k=1;k<=total;k++){
+    if(status[k]) arr.push(status[k]);
+    else if(k===curWeek) arr.push('cur');
+    else if((recs[k]||{}).status==='exempt') arr.push('exempt');
+    else arr.push('');
+  }
+  return { fine:fine, statuses:arr };
+}
+
+/* 그룹 멤버 + 전체 주차기록 로드 → members(벌금 derive)/weeks/state 채움 */
+async function loadGroupData(){
+  if(!state.groupId || !state.membershipId) return;
+  var mr=await db.from('memberships')
+    .select('id,weekly_goal,is_admin,leverage_left,profile_id,profiles(nickname)')
+    .eq('group_id', state.groupId);
+  var rows=mr.data||[];
+  var ids=rows.map(function(r){ return r.id; });
+  var recsBy={};
+  if(ids.length){
+    var wr=await db.from('weekly_records').select('membership_id,week_no,done_count,status,leveraged').in('membership_id', ids);
+    (wr.data||[]).forEach(function(r){ (recsBy[r.membership_id]=recsBy[r.membership_id]||{})[r.week_no]=r; });
+  }
+  members=rows.map(function(r,i){
+    var recs=recsBy[r.id]||{};
+    var d=deriveSeason(recs, r.weekly_goal, CURRENT_WEEK, TOTAL_WEEKS);
+    var cur=recs[CURRENT_WEEK]||{};
+    return { membershipId:r.id, profileId:r.profile_id, name:(r.profiles&&r.profiles.nickname)||'?',
+      color:COLORS[i%COLORS.length], goal:r.weekly_goal, fine:d.fine, done:cur.done_count||0,
+      me:r.profile_id===state.myUid, is_admin:r.is_admin, leverageLeft:r.leverage_left,
+      _statuses:d.statuses, _recs:recs };
+  });
+  var me=members.filter(function(m){ return m.me; })[0];
+  if(me){
+    state.goal=me.goal; state.done=me.done; state.leverageLeft=me.leverageLeft;
+    weeks=me._statuses;
+    var c=me._recs[CURRENT_WEEK]||{}, p=me._recs[CURRENT_WEEK-1]||{};
+    state.leverageActive = !!(c.leveraged || p.leveraged);
+  }
+}
+async function refreshGroup(){ await loadGroupData(); renderHome(); renderRank(); renderCap(); }
+
+/* ──────── 홈 렌더 ──────── */
+function renderHome(){
+  document.getElementById('hSeasonNo').textContent = SEASON_NO;
+  document.getElementById('meSeasonNo').textContent = SEASON_NO;
+  document.getElementById('hWeekRange').textContent = CURRENT_WEEK+'주차';
+  document.getElementById('hWeekDates').textContent = CURRENT_WEEK+'주차 · '+rangeLabel(CURRENT_WEEK);
+  // 시즌바
+  document.getElementById('seasonBar').innerHTML = weeks.map(function(w){ return '<div class="wk '+w+'"></div>'; }).join('');
+  // 링
+  var lev = state.leverageActive;
+  var target = lev ? state.goal*2 : state.goal;
+  var remain = Math.max(target-state.done, 0);
+  var ratio = Math.min(state.done/target, 1);
+  document.getElementById('ringFg').setAttribute('stroke-dashoffset', 289*(1-ratio));
+  document.getElementById('ringFg').setAttribute('stroke', lev ? 'var(--blue)' : 'var(--accent)');
+  document.getElementById('ringCnt').textContent = state.done+'/'+target;
+  var ringLabel = document.getElementById('ringLabel');
+  ringLabel.textContent = lev ? '⚡ 레버리지 사용중!' : '이번 주 인증';
+  ringLabel.style.color = lev ? 'var(--blue)' : '';
+  ringLabel.style.fontWeight = lev ? '700' : '';
+  document.getElementById('ringRemain').innerHTML = lev
+    ? '이번주 + 다음주 목표까지 <b style="color:var(--blue)">'+remain+'회</b> 남음'
+    : '목표까지 <b style="color:var(--accent)">'+remain+'회</b> 남음';
+  // 체크 점
+  var dots='';
+  for(var i=0;i<target;i++){ dots += '<div class="dot '+(i<state.done?'on':'')+'">'+(i<state.done?'✓':(i+1))+'</div>'; }
+  document.getElementById('checkDots').innerHTML = dots;
+  // 누적 벌금 (상한 적용)
+  var me=members.filter(function(m){ return m.me; })[0];
+  document.getElementById('homeFine').textContent = (me?fineOf(me):0).toLocaleString()+'원';
+  // 연속 배너 + 레버리지
+  renderStreakBanner();
+  renderLeverage();
+}
+
+/* 직전 주차들로부터 연속 성공/실패 streak 계산 → 배너 */
+function renderStreakBanner(){
+  var cur = weeks.indexOf('cur'); if(cur<0) cur = weeks.length;
+  var fineBase = state.goal===3?3000 : state.goal===4?2000 : 1000;
+  var streak=0, mode=null;
+  for(var i=cur-1; i>=0; i--){
+    var w=weeks[i];
+    if(w==='exempt') continue;          // 면제 주차는 건너뜀 (중립)
+    if(w!=='done' && w!=='fail') break;
+    if(mode===null) mode=w;
+    if(w===mode) streak++; else break;
+  }
+  var el = document.getElementById('streakBanner'), html='';
+  if(mode==='fail' && streak>0){
+    var mult = Math.pow(2, streak);            // 다음 실패 시 배수
+    var amt = (fineBase*mult).toLocaleString();
+    html = '<div class="banner bad"><span class="ic">⚠️</span><div class="t">'+
+      '<b>'+streak+'주 연속 실패 중이에요.</b><br/>'+
+      '<span class="muted">이번 주도 놓치면 벌금이 <b style="color:var(--danger)">'+mult+'배('+amt+'원)</b>로 누적돼요. 오늘 바로 인증하세요!</span></div></div>';
+  } else if(mode==='done' && streak>0){
+    html = '<div class="banner good"><span class="ic">🔥</span><div class="t">'+
+      '<b>'+streak+'주 연속 달성 중!</b><br/>'+
+      '<span class="muted">이 기세 그대로 이번 주도 목표를 채워봐요. 누진 벌금 걱정 없어요 👍</span></div></div>';
+  } else {
+    html = '<div class="banner neutral"><span class="ic">🎯</span><div class="t">'+
+      '<b>이번 주가 시작됐어요.</b><br/>'+
+      '<span class="muted">목표 주 '+state.goal+'회를 채우면 벌금 0원! 첫 인증을 올려보세요.</span></div></div>';
+  }
+  el.innerHTML = html;
+}
+
+/* ──────── 인증 업로드 (실제 파일 + EXIF) ──────── */
+var selectedFile=null, uploadType='photo', captureAt=null;
+async function handleFile(e){
+  var file = e.target.files && e.target.files[0];
+  if(!file) return;
+  selectedFile = file;
+  // 미리보기
+  document.getElementById('upPh').style.display='none';
+  document.getElementById('upTxt').style.display='none';
+  var u=document.getElementById('uploader');
+  var ex=u.querySelector('.fakeimg'); if(ex) ex.remove();
+  var img=document.createElement('img'); img.className='fakeimg';
+  img.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
+  img.src=URL.createObjectURL(file); u.appendChild(img);
+  // EXIF 추출 → 원본(촬영일 있음) / 캡쳐(없음) 판별
+  var exif=null; try{ exif=await exifr.parse(file); }catch(_){}
+  var dto = exif && (exif.DateTimeOriginal || exif.CreateDate || exif.ModifyDate);
+  if(dto){ uploadType='photo'; captureAt=new Date(dto); }
+  else { uploadType='capture'; captureAt=null; }
+  // 메타데이터 카드
+  var mc=document.getElementById('metaCard'); mc.classList.remove('hidden');
+  var vd=document.getElementById('metaVerdict');
+  document.getElementById('metaWeek').textContent=CURRENT_WEEK+'주차 ('+rangeLabel(CURRENT_WEEK)+')';
+  if(uploadType==='capture'){
+    document.getElementById('metaDate').textContent='— (메타데이터 없음)';
+    vd.className='verify-tag bad'; vd.textContent='📷 캡쳐 사진 · 확인 필요';
+    document.getElementById('metaNote').textContent='스크린샷·공유 이미지는 촬영 메타데이터가 없어요. 멤버가 직접 확인 후 승인해줘요.';
+    toast('캡쳐 사진 · 멤버 확인이 필요해요');
+  } else {
+    var ok=inWeek(captureAt, CURRENT_WEEK);
+    document.getElementById('metaDate').textContent=fmtDateTime(captureAt);
+    vd.className='verify-tag '+(ok?'ok':'bad');
+    vd.textContent=ok?'✓ 메타데이터 인증':'⚠ 이전 주차 사진';
+    document.getElementById('metaNote').textContent= ok
+      ? '촬영일이 이번 주차 안에 있어 자동 인증돼요.'
+      : '촬영일이 이번 주차를 벗어났어요. 멤버 확인이 필요해요.';
+    toast('원본 사진 · 촬영일 자동 확인됨');
+  }
+}
+async function submitCertify(){
+  if(!state.membershipId){ toast('로그인이 필요해요'); return; }
+  if(!selectedFile){ toast('운동 사진을 올려주세요'); return; }
+  var memo=document.getElementById('certifyMemo').value || null;
+  // 1) Storage 업로드
+  var ext=(selectedFile.name.split('.').pop()||'jpg').toLowerCase();
+  var path=state.groupId+'/'+state.membershipId+'/'+Date.now()+'.'+ext;
+  var up=await db.storage.from('certs').upload(path, selectedFile, {contentType:selectedFile.type});
+  if(up.error){ toast('사진 업로드 실패: '+up.error.message+' (certs 버킷 확인)'); return; }
+  var photoUrl=db.storage.from('certs').getPublicUrl(path).data.publicUrl;
+  // 2) 인증 생성
+  var ci=await db.from('certifications').insert({
+    membership_id:state.membershipId, week_no:CURRENT_WEEK,
+    memo:memo, photo_type:uploadType, photo_url:photoUrl,
+    capture_at: uploadType==='capture' ? null : (captureAt ? captureAt.toISOString() : null)
+  }).select('id').maybeSingle();
+  if(ci.error){ toast('인증 실패: '+ci.error.message); return; }
+  // 3) 이번 주 카운트 +1
+  var ex=await db.from('weekly_records').select('id,done_count')
+    .eq('membership_id',state.membershipId).eq('week_no',CURRENT_WEEK).maybeSingle();
+  if(ex.data){ await db.from('weekly_records').update({done_count:ex.data.done_count+1}).eq('id',ex.data.id); }
+  else { await db.from('weekly_records').insert({membership_id:state.membershipId, week_no:CURRENT_WEEK, done_count:1, status:'pending'}); }
+  // 4) 링크 공유 (Web Share / 폴백 복사)
+  await shareCertification(ci.data ? ci.data.id : null);
+  // UI 초기화
+  selectedFile=null; uploadType='photo'; captureAt=null;
+  document.getElementById('upPh').style.display='';
+  document.getElementById('upTxt').style.display='';
+  var fk=document.querySelector('#uploader .fakeimg'); if(fk) fk.remove();
+  document.getElementById('metaCard').classList.add('hidden');
+  document.getElementById('certifyMemo').value='';
+  document.getElementById('photoInput').value='';
+  await refreshGroup(); await refreshFeed();
+  setTimeout(function(){ go('home'); }, 700);
+}
+/* 인증 피드 링크를 카톡 등으로 공유 (Web Share API, 반자동) */
+async function shareCertification(certId){
+  var url=location.href.split('?')[0].split('#')[0]+'?cert='+(certId||'');
+  var text=state.nickname+'님이 오운완 인증을 올렸어요! 확인하고 승인해주세요 💪';
+  try{
+    if(navigator.share){ await navigator.share({title:'오운완 인증 요청', text:text, url:url}); return; }
+  }catch(err){ if(err && err.name==='AbortError') return; }
+  try{ if(navigator.clipboard){ await navigator.clipboard.writeText(url); } }catch(_){}
+  toast('인증 링크를 복사했어요 · 단톡방에 붙여넣어 공유하세요');
+}
+
+/* ──────── 피드 (DB) ──────── */
+function relTime(iso){
+  if(!iso) return '';
+  var diff=(Date.now()-new Date(iso).getTime())/1000;
+  if(diff<60) return '방금';
+  if(diff<3600) return Math.floor(diff/60)+'분 전';
+  if(diff<86400) return Math.floor(diff/3600)+'시간 전';
+  return Math.floor(diff/86400)+'일 전';
+}
+async function loadFeed(){
+  if(!state.groupId){ feed=[]; return; }
+  var cf=await db.from('certifications')
+    .select('id,memo,photo_type,photo_url,capture_at,status,approvals,created_at, memberships!inner(group_id,profile_id,profiles(nickname))')
+    .eq('memberships.group_id', state.groupId)
+    .order('created_at',{ascending:false}).limit(50);
+  var mine=await db.from('certification_approvals').select('certification_id').eq('approver_id', state.myUid);
+  var approvedSet={}; (mine.data||[]).forEach(function(a){ approvedSet[a.certification_id]=true; });
+  feed=(cf.data||[]).map(function(c){
+    var prof=c.memberships&&c.memberships.profiles;
+    return { id:c.id, name:prof?prof.nickname:'?', memo:c.memo||'오운완 완료!',
+      photoType:c.photo_type, photoUrl:c.photo_url, captureAt:c.capture_at,
+      approvals:c.approvals, status:c.status,
+      mine:c.memberships&&c.memberships.profile_id===state.myUid,
+      approved:!!approvedSet[c.id], created_at:c.created_at };
+  });
+}
+async function refreshFeed(){ await loadFeed(); renderFeed(); }
+function certVerdict(pt, capIso){
+  if(pt==='capture') return {cls:'bad', tag:'📷 캡쳐 · 확인 필요', date:'— (메타데이터 없음)'};
+  var d=capIso ? new Date(capIso) : null;
+  var ok=d && inWeek(d, CURRENT_WEEK);
+  return ok ? {cls:'ok', tag:'✓ 메타데이터 인증', date:fmtDateTime(d)}
+            : {cls:'bad', tag:'⚠ 범위 밖', date:d?fmtDateTime(d):'—'};
+}
+function renderFeed(){
+  var el=document.getElementById('feedList');
+  if(!feed.length){ el.innerHTML='<div class="card tight"><span class="mute2 small">아직 인증이 없어요. 첫 오운완을 올려보세요!</span></div>'; return; }
+  el.innerHTML=feed.map(function(f){
+    var v=certVerdict(f.photoType, f.captureAt);
+    var tag='<span class="verify-tag '+v.cls+'">'+v.tag+'</span>';
+    var action;
+    if(f.mine) action='<span class="pill">내 인증 · 승인 '+f.approvals+'/'+APPROVE_NEEDED+'명</span>';
+    else if(f.approved) action='<span class="pill accent">✓ 승인함</span>';
+    else action='<button class="btn sm" onclick="approve(\''+f.id+'\')">승인</button>';
+    var line = f.status==='approved' ? '✓ 인증 완료 · 승인 '+f.approvals+'/'+APPROVE_NEEDED+'명'
+                                     : '승인 '+f.approvals+'/'+APPROVE_NEEDED+'명'+(f.mine?'':' · '+APPROVE_NEEDED+'명이면 완료');
+    var thumb = f.photoUrl
+      ? '<div class="thumb" style="background-image:url('+f.photoUrl+');background-size:cover;background-position:center;" onclick="openPhoto(\''+f.id+'\')"><span class="zoom">🔍</span></div>'
+      : '<div class="thumb">📷</div>';
+    return '<div class="card tight">'+
+      '<div class="feed-item">'+
+        '<div class="avatar" style="background:'+COLORS[(f.name.charCodeAt(0))%COLORS.length]+'">'+f.name.charAt(0)+'</div>'+
+        '<div style="flex:1; min-width:0;">'+
+          '<div class="row"><b style="font-size:14px;">'+f.name+'</b><span class="mute2 small">'+relTime(f.created_at)+'</span></div>'+
+          '<div class="muted small" style="margin-top:2px;">'+f.memo+'</div>'+
+          '<div style="margin-top:6px;">'+tag+'</div>'+
+        '</div>'+
+        thumb+
+      '</div>'+
+      '<div class="row" style="margin-top:11px;"><span class="mute2 small">'+line+'</span>'+action+'</div>'+
+    '</div>';
+  }).join('');
+}
+async function approve(certId){
+  var r=await db.from('certification_approvals').insert({ certification_id:certId, approver_id:state.myUid });
+  if(r.error){ toast('승인 실패: '+r.error.message); return; }
+  toast('인증을 승인했어요 👍');
+  await refreshFeed();
+}
+
+/* 사진 뷰어 */
+function openPhoto(certId){
+  var f=feed.filter(function(x){ return x.id===certId; })[0]; if(!f) return;
+  var v=certVerdict(f.photoType, f.captureAt);
+  var op=document.getElementById('ovPhoto');
+  if(f.photoUrl){ op.style.backgroundImage='url('+f.photoUrl+')'; op.style.backgroundSize='cover'; op.style.backgroundPosition='center'; op.textContent=''; }
+  else { op.style.backgroundImage=''; op.textContent='📷'; }
+  document.getElementById('ovName').textContent=f.name;
+  document.getElementById('ovAgo').textContent=relTime(f.created_at);
+  document.getElementById('ovMemo').textContent=f.memo;
+  document.getElementById('ovDate').textContent=v.date;
+  document.getElementById('ovWeek').textContent=CURRENT_WEEK+'주차 ('+rangeLabel(CURRENT_WEEK)+')';
+  var vd=document.getElementById('ovVerdict');
+  vd.className='verify-tag '+v.cls;
+  vd.textContent=v.tag;
+  document.getElementById('photoView').classList.add('show');
+}
+function closePhoto(){ document.getElementById('photoView').classList.remove('show'); }
+
+/* ──────── 랭킹 ──────── */
+var FINE_CAP = 100000;                  // 1인 누적 벌금 상한
+var APPROVE_NEEDED = 2;                  // 인증 완료에 필요한 승인 수
+function fineOf(m){ return Math.min(m.fine, FINE_CAP); }
+function sumFines(){ return members.reduce(function(s,m){ return s+fineOf(m); }, 0); }
+function rankRows(){
+  var sorted = members.slice().sort(function(a,b){ return fineOf(a)-fineOf(b); });
+  return sorted.map(function(m,i){
+    var medal = ['🥇','🥈','🥉'][i] || (i+1);
+    var shown = fineOf(m);
+    var capTag = m.fine>=FINE_CAP ? ' <span class="mute2 small">· 상한</span>' : '';
+    return ''+
+    '<div class="rank-row">'+
+      '<div class="rank-no '+(i<3?'top':'')+'">'+medal+'</div>'+
+      '<div class="avatar" style="background:'+m.color+'; width:38px; height:38px; flex:0 0 38px;">'+m.name.charAt(0)+'</div>'+
+      '<div style="flex:1;">'+
+        '<div><b style="font-size:14px;">'+m.name+'</b>'+(m.me?' <span class="pill accent" style="padding:2px 7px;">나</span>':'')+'</div>'+
+        '<div class="mute2 small">주 '+m.goal+'회 · 이번 주 '+m.done+'/'+m.goal+'</div>'+
+      '</div>'+
+      '<div class="rank-amt" style="color:'+(shown===0?'var(--accent)':'var(--text)')+'">'+shown.toLocaleString()+'원'+capTag+'</div>'+
+    '</div>';
+  }).join('');
+}
+function renderRank(){
+  document.getElementById('rankList').innerHTML = rankRows();
+  document.getElementById('rankTotal').textContent = sumFines().toLocaleString()+'원';
+}
+function renderSeasonEnd(){
+  document.getElementById('endRankList').innerHTML = rankRows();
+  document.getElementById('endTotal').textContent = sumFines().toLocaleString()+'원';
+  document.getElementById('adminStartBox').classList.toggle('hidden', !state.isAdmin);
+  document.getElementById('userWaitBox').classList.toggle('hidden', state.isAdmin);
+}
+
+/* ──────── 마이 / 관리자 ──────── */
+function renderAdminUI(){
+  var el=document.getElementById('adminSection');
+  if(el) el.classList.toggle('hidden', !state.isAdmin);   // 방장만 표시 (DB is_admin)
+}
+
+/* ──────── 초대코드 ──────── */
+var INVITE_CODE = 'OWAN-A7K3-PQ9X-B2MN';
+function genCode(){
+  var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 헷갈리는 0/O/1/I 제외
+  function grp(){ var s=''; for(var i=0;i<4;i++){ s+=chars.charAt(Math.floor(Math.random()*chars.length)); } return s; }
+  return 'OWAN-'+grp()+'-'+grp()+'-'+grp();
+}
+function renderInviteCode(){
+  document.getElementById('adminCode').textContent = INVITE_CODE;
+  document.getElementById('meCode').textContent = INVITE_CODE;
+}
+function copyCode(){
+  if(navigator.clipboard){ navigator.clipboard.writeText(INVITE_CODE); }
+  toast('초대코드를 복사했어요');
+}
+function shareCode(){ toast('<span class="kakao">KAKAO</span> 단톡방에 초대코드를 공유했어요!'); }
+async function regenCode(){
+  var r=await db.rpc('regenerate_code',{p_group_id:state.groupId});
+  if(r.error){ toast('재발급 실패: '+r.error.message); return; }
+  INVITE_CODE=r.data; renderInviteCode();
+  toast('새 코드 발급 완료 · 기존 코드는 무효화됐어요');
+}
+
+/* ──────── 정원 ──────── */
+var CAP = 8;
+function renderCap(){
+  var n=members.length;
+  document.getElementById('capVal').textContent = CAP;
+  document.getElementById('capCount').textContent = n;
+  document.getElementById('memCapPill').textContent = n+' / '+CAP+'명';
+}
+async function bumpCap(d){
+  var v=CAP+d;
+  if(v<members.length){ toast('정원은 현재 인원('+members.length+'명)보다 작을 수 없어요'); return; }
+  if(v<1||v>50) return;
+  var r=await db.rpc('set_capacity',{p_group_id:state.groupId, p_capacity:v});
+  if(r.error){ toast('정원 변경 실패: '+r.error.message); return; }
+  CAP=v; renderCap(); toast('정원을 '+CAP+'명으로 변경했어요');
+}
+
+/* ──────── 멤버 관리 ──────── */
+function renderMembers(){
+  document.getElementById('memberList').innerHTML = members.map(function(m,i){
+    var btn = m.me ? '<span class="pill accent">나 (방장)</span>'
+                   : '<button class="btn outline sm" onclick="kickMember('+i+')">내보내기</button>';
+    return '<div class="rank-row">'+
+      '<div class="avatar" style="background:'+m.color+'; width:38px; height:38px; flex:0 0 38px;">'+m.name.charAt(0)+'</div>'+
+      '<div style="flex:1;"><b style="font-size:14px;">'+m.name+'</b>'+
+        '<div class="mute2 small">주 '+m.goal+'회 · 이번 주 '+m.done+'/'+m.goal+'</div></div>'+
+      btn+'</div>';
+  }).join('');
+  renderCap();
+}
+async function kickMember(i){
+  var m=members[i]; if(!m) return;
+  var r=await db.rpc('kick_member',{p_membership_id:m.membershipId});
+  if(r.error){ toast('내보내기 실패: '+r.error.message); return; }
+  toast(m.name+'님을 내보냈어요 · 정원 1칸이 비었어요');
+  await loadGroupData(); renderMembers(); renderRank();
+}
+
+/* ──────── 주차별 기록 (달력, DB) ──────── */
+var DOW_KO = ['일','월','화','수','목','금','토'];
+async function renderRecords(){
+  var r=weekRange(CURRENT_WEEK);
+  document.getElementById('recWeekTitle').textContent = '이번 주 · '+CURRENT_WEEK+'주차';
+  document.getElementById('recWeekRange').textContent = rangeLabel(CURRENT_WEEK);
+  var doneDays={};
+  if(state.membershipId){
+    var cf=await db.from('certifications').select('created_at,capture_at')
+      .eq('membership_id', state.membershipId).eq('week_no', CURRENT_WEEK);
+    (cf.data||[]).forEach(function(c){ var d=new Date(c.capture_at||c.created_at); doneDays[d.getMonth()+'-'+d.getDate()]=true; });
+  }
+  var html='';
+  for(var i=0;i<7;i++){
+    var d=new Date(r.s); d.setDate(d.getDate()+i);
+    var done = doneDays[d.getMonth()+'-'+d.getDate()];
+    var isToday = d.getMonth()===TODAY.getMonth() && d.getDate()===TODAY.getDate() && d.getFullYear()===TODAY.getFullYear();
+    var future = d>TODAY && !isToday;
+    var cls='cell'+(done?' done':'')+(isToday?' today':'')+(future?' future':'');
+    html+='<div class="day"><div class="dow">'+DOW_KO[d.getDay()]+'</div><div class="'+cls+'">'+d.getDate()+'</div></div>';
+  }
+  document.getElementById('calWeek').innerHTML=html;
+  document.getElementById('recSummary').textContent='이번 주 '+state.done+'/'+state.goal+'회 운동했어요.';
+  // 주차별 결과
+  var wr='';
+  for(var k=0;k<weeks.length;k++){
+    if(weeks[k]==='') continue;
+    var badge = weeks[k]==='done'   ? '<span class="verify-tag ok">✓ 달성</span>'
+              : weeks[k]==='fail'   ? '<span class="verify-tag bad">✗ 미달</span>'
+              : weeks[k]==='exempt' ? '<span class="verify-tag gray">– 면제</span>'
+              : '<span class="pill blue">진행 중</span>';
+    wr+='<div class="wk-result"><div><b style="font-size:14px;">'+(k+1)+'주차</b> <span class="mute2 small">'+rangeLabel(k+1)+'</span></div>'+badge+'</div>';
+  }
+  document.getElementById('weekResults').innerHTML = wr || '<div class="wk-result"><span class="mute2 small">아직 기록이 없어요</span></div>';
+}
+
+/* ──────── 레버리지 ──────── */
+function renderLeverage(){
+  var el=document.getElementById('leverageCard');
+  var target=state.goal*2;
+  if(state.leverageActive){
+    el.innerHTML='<div class="row" style="margin-bottom:6px;"><b>⚡ 레버리지 사용중</b><span class="mute2 small">'+state.leverageLeft+'/2회 남음</span></div>'+
+      '<div class="muted small" style="line-height:1.55;">이번 주 판정을 다음 주와 합쳐 진행 중이에요. 위 진행률을 채우면 두 주 모두 인정돼요. 실패하면 두 주가 연속 미달로 처리돼 누진 벌금이 적용돼요.</div>';
+    return;
+  }
+  if(CURRENT_WEEK>=TOTAL_WEEKS){
+    el.innerHTML='<div class="row"><b class="muted">⚡ 레버리지</b><span class="mute2 small">마지막 주차엔 사용 불가</span></div>';
+    return;
+  }
+  el.innerHTML='<div class="row" style="margin-bottom:8px;"><b>⚡ 레버리지</b><span class="mute2 small">'+state.leverageLeft+'/2회 남음</span></div>'+
+    '<div class="muted small" style="margin-bottom:12px; line-height:1.55;">이번 주가 도저히 안 될 것 같다면? 이번 주 판정을 다음 주와 합쳐 <b style="color:var(--text)">총 '+target+'회</b>로 미뤄요.</div>'+
+    '<button class="btn ghost sm" style="width:100%;'+(state.leverageLeft<=0?' opacity:.4;':'')+'" onclick="useLeverage()">레버리지 사용하기</button>';
+}
+async function useLeverage(){
+  if(CURRENT_WEEK>=TOTAL_WEEKS){ toast('마지막 주차에는 레버리지를 쓸 수 없어요'); return; }
+  if(state.leverageLeft<=0){ toast('이번 시즌 레버리지를 모두 사용했어요'); return; }
+  if(state.leverageActive){ toast('이미 레버리지 사용 중이에요'); return; }
+  var r=await db.rpc('use_leverage',{p_group_id:state.groupId, p_week_no:CURRENT_WEEK});
+  if(r.error){ toast('레버리지 사용 실패: '+r.error.message); return; }
+  await loadGroupData(); renderHome();
+  toast('레버리지 사용! 다음 주까지 총 '+(state.goal*2)+'회 채우면 두 주 모두 인정돼요 ⚡');
+}
+
+/* ──────── 개인 사정 면제 (방장, DB) ──────── */
+var exemptions=[];
+var exMemberId=null, exWeek=null;
+async function loadExemptions(){
+  exemptions=[];
+  var ids=members.map(function(m){ return m.membershipId; });
+  if(!ids.length) return;
+  var ex=await db.from('exemptions').select('week_no,membership_id').in('membership_id', ids);
+  exemptions=(ex.data||[]).map(function(e){
+    var m=members.filter(function(x){ return x.membershipId===e.membership_id; })[0];
+    return { membershipId:e.membership_id, name:m?m.name:'?', week:e.week_no };
+  });
+}
+function renderExemptScreen(){
+  document.getElementById('exMemberChips').innerHTML = members.map(function(m){
+    return '<div class="chip '+(exMemberId===m.membershipId?'on':'')+'" onclick="pickExMember(\''+m.membershipId+'\')">'+m.name+'</div>';
+  }).join('');
+  var wc='';
+  for(var i=1;i<=CURRENT_WEEK;i++){ wc+='<div class="chip '+(exWeek===i?'on':'')+'" onclick="pickExWeek('+i+')">'+i+'주차</div>'; }
+  document.getElementById('exWeekChips').innerHTML=wc;
+  loadExemptions().then(renderExemptList);
+}
+function pickExMember(id){ exMemberId=id; renderExemptScreen(); }
+function pickExWeek(w){ exWeek=w; renderExemptScreen(); }
+async function applyExemption(){
+  if(!exMemberId){ toast('멤버를 선택해주세요'); return; }
+  if(!exWeek){ toast('면제할 주차를 선택해주세요'); return; }
+  var r=await db.rpc('exempt_week',{p_membership_id:exMemberId, p_week_no:exWeek});
+  if(r.error){ toast('면제 실패: '+r.error.message); return; }
+  toast('면제 처리했어요');
+  exMemberId=null; exWeek=null;
+  await loadGroupData(); renderExemptScreen(); renderHome();
+}
+function renderExemptList(){
+  var el=document.getElementById('exemptList');
+  if(!exemptions.length){ el.innerHTML='<div class="wk-result"><span class="mute2 small">아직 면제 내역이 없어요</span></div>'; return; }
+  el.innerHTML=exemptions.map(function(e){
+    return '<div class="wk-result"><div><b style="font-size:14px;">'+e.name+'</b> <span class="mute2 small">'+e.week+'주차 ('+rangeLabel(e.week)+')</span></div>'+
+      '<button class="btn outline sm" onclick="removeExemption(\''+e.membershipId+'\','+e.week+')">해제</button></div>';
+  }).join('');
+}
+async function removeExemption(mid, w){
+  var r=await db.rpc('remove_exemption',{p_membership_id:mid, p_week_no:w});
+  if(r.error){ toast('해제 실패: '+r.error.message); return; }
+  toast('면제를 해제했어요');
+  await loadGroupData(); renderExemptScreen(); renderHome();
+}
+var SEASON_NO = 1;
+function startNewSeason(){ go('newSeason'); }
+function bumpWeeks(d){
+  var el=document.getElementById('nsWeeks');
+  var v=Math.min(Math.max((parseInt(el.value,10)||8)+d,1),52);
+  el.value=v; renderSeasonPreview();
+}
+function parseDateInput(v){ var p=(v||'').split('-'); return new Date(+p[0], (+p[1])-1, +p[2]); }
+function renderSeasonPreview(){
+  var start=parseDateInput(document.getElementById('nsDate').value);
+  var wks=Math.min(Math.max(parseInt(document.getElementById('nsWeeks').value,10)||8,1),52);
+  var end=new Date(start); end.setDate(end.getDate()+wks*7-1);
+  var w1e=new Date(start); w1e.setDate(w1e.getDate()+6);
+  document.getElementById('nsTotalPill').textContent='시즌 '+(SEASON_NO+1)+' · '+wks+'주';
+  document.getElementById('nsStart').textContent=fmtFull(start);
+  document.getElementById('nsEnd').textContent=fmtFull(end);
+  document.getElementById('nsWeek1').textContent=fmtMD(start)+'~'+fmtMD(w1e);
+}
+async function createSeason(){
+  var start=document.getElementById('nsDate').value;
+  var wks=Math.min(Math.max(parseInt(document.getElementById('nsWeeks').value,10)||8,1),52);
+  var r=await db.rpc('start_new_season',{ p_group_id:state.groupId, p_season_start:start, p_total_weeks:wks });
+  if(r.error){ toast('새 시즌 시작 실패: '+r.error.message); return; }
+  await loadSession();   // 갱신된 시즌번호·날짜·주차·초기화 반영
+  go('home');
+  toast('새 시즌 시작! 1주차 동안 마이 → 목표에서 주당 횟수를 다시 정할 수 있어요 💪');
+}
+
+/* ──────── 토스트 ──────── */
+var toastTimer;
+function toast(html){
+  var t=document.getElementById('toast'); t.innerHTML=html; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove('show'); }, 2200);
+}
+
+/* ──────── 초기화 ──────── */
+(async function init(){
+  document.getElementById('onbSeasonRange').textContent = fmtMD(weekRange(1).s)+' (월)';
+  applyIdentity(); renderHome(); renderFeed(); renderRank(); renderInviteCode(); renderCap();
+  var logged=false;
+  try { logged = await loadSession(); } catch(e){ console.error('세션 로드 실패', e); }
+  go(logged ? 'home' : 'onboard');   // 로그인 토큰 있으면 바로 홈
+
+  // 딥링크: ?cert=<id> 로 들어오면 해당 인증 열기
+  var certParam = new URLSearchParams(location.search).get('cert');
+  if(logged && certParam){
+    await refreshFeed(); go('feed');
+    setTimeout(function(){ openPhoto(certParam); }, 300);
+  }
+
+  // PWA 서비스워커 등록
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(function(e){ console.warn('SW 등록 실패', e); });
+  }
+})();
+</script>
+</body>
+</html>
