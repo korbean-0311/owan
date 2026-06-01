@@ -283,7 +283,7 @@
     <section class="screen active" data-screen="onboard">
       <div class="onb">
         <div class="onb-step active" data-step="0">
-          <div class="logo">오<span>운</span>완</div>
+          <div class="logo" onclick="logoTap()">오<span>운</span>완</div>
           <div class="tag" style="margin-left:2px;">by WFL</div>
           <div class="spacer"></div>
           <label class="lbl">초대 코드</label>
@@ -291,7 +291,7 @@
           <p class="mute2 small" style="margin:10px 2px 0;">초대받은 멤버만 입장할 수 있어요.</p>
           <div class="spacer"></div>
           <button class="btn" onclick="onbJoin()">코드로 참여하기</button>
-          <button class="btn outline" style="margin-top:10px;" onclick="onbCreate()">새 그룹 만들기 (방장)</button>
+          <button class="btn outline hidden" id="createGroupBtn" style="margin-top:10px;" onclick="onbCreate()">새 그룹 만들기 (방장)</button>
           <button class="btn outline" style="margin-top:10px;" onclick="go('login')">이미 가입했어요? 로그인</button>
         </div>
 
@@ -799,6 +799,13 @@ async function onbJoin(){
 }
 // 새 그룹 만들기 → 설정 단계로
 function onbCreate(){ onbMode = 'create'; showOnbStep(3); }
+// '새 그룹 만들기'는 숨겨진 기능: 로고 5번 탭(또는 ?create)으로 공개
+var logoTaps=0;
+function logoTap(){ if(++logoTaps>=5) revealCreate(); }
+function revealCreate(){
+  var b=document.getElementById('createGroupBtn');
+  if(b && b.classList.contains('hidden')){ b.classList.remove('hidden'); toast('🛠 방장 모드: 새 그룹 만들기가 열렸어요'); }
+}
 function onbCreateNext(){
   var name = document.getElementById('cgName').value.trim();
   if(!name){ toast('그룹 이름을 입력해주세요'); return; }
@@ -1326,7 +1333,14 @@ function copyCode(){
   if(navigator.clipboard){ navigator.clipboard.writeText(INVITE_CODE); }
   toast('초대코드를 복사했어요');
 }
-function shareCode(){ toast('<span class="kakao">KAKAO</span> 단톡방에 초대코드를 공유했어요!'); }
+async function shareCode(){
+  var base=location.href.split('?')[0].split('#')[0];
+  var msg='오운완 운동 인증 모임에 초대합니다! 💪\n초대코드: '+INVITE_CODE+'\n아래 링크로 입장하세요:\n'+base+'?join='+encodeURIComponent(INVITE_CODE);
+  try{ if(navigator.share){ await navigator.share({ text: msg }); return; } }
+  catch(err){ if(err && err.name==='AbortError') return; }
+  try{ if(navigator.clipboard){ await navigator.clipboard.writeText(msg); } }catch(_){}
+  toast('초대 메시지를 복사했어요 · 단톡방에 붙여넣어 공유하세요');
+}
 async function regenCode(){
   var r=await db.rpc('regenerate_code',{p_group_id:state.groupId});
   if(r.error){ toast('재발급 실패: '+r.error.message); return; }
@@ -1525,11 +1539,18 @@ function toast(html){
   try { logged = await loadSession(); } catch(e){ console.error('세션 로드 실패', e); }
   go(logged ? 'home' : 'onboard');   // 로그인 토큰 있으면 바로 홈
 
-  // 딥링크: ?cert=<id> 로 들어오면 해당 인증 열기
-  var certParam = new URLSearchParams(location.search).get('cert');
+  // 딥링크 처리
+  var params = new URLSearchParams(location.search);
+  var certParam = params.get('cert');
   if(logged && certParam){
     await refreshFeed(); go('feed');
     setTimeout(function(){ openPhoto(certParam); }, 300);
+  }
+  if(params.get('create')!==null) revealCreate();           // ?create → 새 그룹 버튼 공개
+  var joinParam = params.get('join');
+  if(!logged && joinParam){                                  // ?join=CODE → 초대코드 자동 입력
+    var inp=document.getElementById('inviteCode'); if(inp) inp.value=joinParam;
+    showOnbStep(0); go('onboard');
   }
 
   // PWA 서비스워커 등록
