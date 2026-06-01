@@ -118,9 +118,9 @@
   .home-head{
     position:absolute; top:0; left:0; right:0; z-index:20;
     padding:16px 20px 12px;
-    background:rgba(20,24,30,.45);
-    backdrop-filter:blur(18px) saturate(150%);
-    -webkit-backdrop-filter:blur(18px) saturate(150%);
+    background:rgba(20,24,30,.32);
+    backdrop-filter:blur(20px) saturate(160%);
+    -webkit-backdrop-filter:blur(20px) saturate(160%);
     border-bottom:1px solid rgba(255,255,255,.06);
   }
   .screen[data-screen="home"] .scroll{padding-top:90px;}
@@ -410,7 +410,7 @@
             <div class="stat"><span class="muted small">누적 벌금</span><span class="big danger" id="homeFine">6,000원</span></div>
           </div>
           <div class="card tight" style="flex:1; margin:0;">
-            <div class="stat"><span class="muted small">현재 순위</span><span class="big">3<span style="font-size:15px; color:var(--text-dim)">위</span></span></div>
+            <div class="stat"><span class="muted small">현재 순위</span><span class="big" id="homeRank">-</span></div>
           </div>
         </div>
 
@@ -501,15 +501,7 @@
           </div>
         </div>
         <div class="card">
-          <div class="menu-row" onclick="toggleGoalPicker()"><span>이번 시즌 목표</span><span class="pill accent" id="meGoalPill">주 4회</span></div>
-          <div id="goalPicker" class="hidden" style="padding:4px 4px 10px;">
-            <div class="chip-sel">
-              <div class="chip" data-g="3" onclick="changeGoal(3)">주 3회</div>
-              <div class="chip" data-g="4" onclick="changeGoal(4)">주 4회</div>
-              <div class="chip" data-g="5" onclick="changeGoal(5)">주 5회</div>
-            </div>
-            <p class="mute2 small" style="margin:8px 2px 0;">목표는 1주차에만 변경할 수 있어요 (시즌 중 고정).</p>
-          </div>
+          <div class="menu-row"><span>이번 시즌 목표</span><span class="pill accent" id="meGoalPill">주 4회</span></div>
           <div class="menu-row" onclick="go('records')"><span>주차별 기록 보기</span><span class="mute2">›</span></div>
         </div>
 
@@ -881,22 +873,6 @@ function applyIdentity(){
   document.getElementById('shareNick').textContent = state.nickname;
   var mg=document.getElementById('meGoalPill'); if(mg) mg.textContent='주 '+state.goal+'회';
 }
-/* 목표 변경 (1주차에만 허용 — 시즌 중 고정 규칙) */
-function toggleGoalPicker(){
-  if(CURRENT_WEEK!==1){ toast('목표는 1주차에만 변경할 수 있어요 (시즌 중 고정)'); return; }
-  var p=document.getElementById('goalPicker');
-  p.classList.toggle('hidden');
-  document.querySelectorAll('#goalPicker .chip').forEach(function(c){ c.classList.toggle('on', +c.dataset.g===state.goal); });
-}
-async function changeGoal(g){
-  if(CURRENT_WEEK!==1){ toast('목표는 1주차에만 변경할 수 있어요'); return; }
-  var r=await db.rpc('set_my_goal',{ p_group_id:state.groupId, p_goal:g });
-  if(r.error){ toast('목표 변경 실패: '+r.error.message); return; }
-  state.goal=g; applyIdentity();
-  document.querySelectorAll('#goalPicker .chip').forEach(function(c){ c.classList.toggle('on', +c.dataset.g===g); });
-  await refreshGroup();
-  toast('이번 시즌 목표를 주 '+g+'회로 정했어요');
-}
 
 /* 재접속 로그인 (닉네임+비밀번호 = 계정) */
 async function doLogin(){
@@ -1053,9 +1029,16 @@ function renderHome(){
   var dots='';
   for(var i=0;i<target;i++){ dots += '<div class="dot '+(i<state.done?'on':'')+'">'+(i<state.done?'✓':(i+1))+'</div>'; }
   document.getElementById('checkDots').innerHTML = dots;
-  // 누적 벌금 (상한 적용)
+  // 누적 벌금 (상한 적용) + 현재 순위 (공동 처리)
   var me=members.filter(function(m){ return m.me; })[0];
-  document.getElementById('homeFine').textContent = (me?fineOf(me):0).toLocaleString()+'원';
+  var myFine = me?fineOf(me):0;
+  document.getElementById('homeFine').textContent = myFine.toLocaleString()+'원';
+  var rankEl=document.getElementById('homeRank');
+  if(me && members.length){
+    var rank = members.filter(function(x){ return fineOf(x) < myFine; }).length + 1;
+    var tied = members.filter(function(x){ return fineOf(x) === myFine; }).length > 1;
+    rankEl.innerHTML = (tied?'<span style="font-size:13px; color:var(--text-dim)">공동 </span>':'') + rank + '<span style="font-size:15px; color:var(--text-dim)">위</span>';
+  } else { rankEl.textContent='-'; }
   // 연속 배너 + 레버리지
   renderStreakBanner();
   renderLeverage();
@@ -1288,16 +1271,19 @@ function fineOf(m){ return Math.min(m.fine, FINE_CAP); }
 function sumFines(){ return members.reduce(function(s,m){ return s+fineOf(m); }, 0); }
 function rankRows(){
   var sorted = members.slice().sort(function(a,b){ return fineOf(a)-fineOf(b); });
-  return sorted.map(function(m,i){
-    var medal = ['🥇','🥈','🥉'][i] || (i+1);
+  return sorted.map(function(m){
+    var rank = sorted.filter(function(x){ return fineOf(x) < fineOf(m); }).length + 1;   // 공동순위(벌금 동률=같은 순위)
+    var tied = sorted.filter(function(x){ return fineOf(x) === fineOf(m); }).length > 1;
+    var medal = rank<=3 ? ['🥇','🥈','🥉'][rank-1] : rank;
     var shown = fineOf(m);
     var capTag = m.fine>=FINE_CAP ? ' <span class="mute2 small">· 상한</span>' : '';
+    var tieTag = tied ? ' <span class="pill" style="padding:1px 7px;">공동</span>' : '';
     return ''+
     '<div class="rank-row">'+
-      '<div class="rank-no '+(i<3?'top':'')+'">'+medal+'</div>'+
+      '<div class="rank-no '+(rank<=3?'top':'')+'">'+medal+'</div>'+
       '<div class="avatar" style="background:'+m.color+'; width:38px; height:38px; flex:0 0 38px;">'+m.name.charAt(0)+'</div>'+
       '<div style="flex:1;">'+
-        '<div><b style="font-size:14px;">'+m.name+'</b>'+(m.me?' <span class="pill accent" style="padding:2px 7px;">나</span>':'')+'</div>'+
+        '<div><b style="font-size:14px;">'+m.name+'</b>'+(m.me?' <span class="pill accent" style="padding:2px 7px;">나</span>':'')+tieTag+'</div>'+
         '<div class="mute2 small">주 '+m.goal+'회 · 이번 주 '+m.done+'/'+m.goal+'</div>'+
       '</div>'+
       '<div class="rank-amt" style="color:'+(shown===0?'var(--accent)':'var(--text)')+'">'+shown.toLocaleString()+'원'+capTag+'</div>'+
@@ -1439,7 +1425,7 @@ function renderLeverage(){
     return;
   }
   el.innerHTML='<div class="row" style="margin-bottom:8px;"><b>⚡ 레버리지</b><span class="mute2 small">'+state.leverageLeft+'/2회 남음</span></div>'+
-    '<div class="muted small" style="margin-bottom:12px; line-height:1.55;">이번 주가 도저히 안 될 것 같다면? 이번 주 판정을 다음 주와 합쳐 <b style="color:var(--text)">총 '+target+'회</b>로 미뤄요.</div>'+
+    '<div class="muted small" style="margin-bottom:12px; line-height:1.55;">이번 주가 도저히 안 될 것 같다면?<br/>이번 주 판정을 다음 주와 합쳐 <b style="color:var(--text)">총 '+target+'회</b>로 미뤄요.</div>'+
     '<button class="btn ghost sm" style="width:100%;'+(state.leverageLeft<=0?' opacity:.4;':'')+'" onclick="useLeverage()">레버리지 사용하기</button>';
 }
 async function useLeverage(){
