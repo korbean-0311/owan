@@ -430,10 +430,15 @@
         <p class="sub">사진을 올리면 단톡방에 자동 공유되고, 멤버 승인 후 완료돼요.</p>
       </div>
       <div class="scroll">
-        <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handleFile(event)"/>
-        <div class="uploader" id="uploader" onclick="document.getElementById('photoInput').click()">
+        <input type="file" id="photoCam" accept="image/*" capture="environment" style="display:none" onchange="handleFile(event,'camera')"/>
+        <input type="file" id="photoGal" accept="image/*" style="display:none" onchange="handleFile(event,'gallery')"/>
+        <div class="uploader" id="uploader" onclick="document.getElementById('photoCam').click()">
           <div class="ph" id="upPh">📷</div>
-          <div id="upTxt">탭해서 운동 사진 올리기</div>
+          <div id="upTxt">탭해서 사진 찍기</div>
+        </div>
+        <div class="row" style="gap:10px; margin-top:10px;">
+          <button class="btn ghost sm" style="flex:1" onclick="document.getElementById('photoCam').click()">📷 사진 찍기</button>
+          <button class="btn ghost sm" style="flex:1" onclick="document.getElementById('photoGal').click()">🖼 갤러리</button>
         </div>
 
         <!-- 사진 메타데이터 자동 검증 -->
@@ -1077,7 +1082,7 @@ function renderStreakBanner(){
 
 /* ──────── 인증 업로드 (실제 파일 + EXIF) ──────── */
 var selectedFile=null, uploadType='photo', captureAt=null;
-async function handleFile(e){
+async function handleFile(e, source){
   var file = e.target.files && e.target.files[0];
   if(!file) return;
   selectedFile = file;
@@ -1089,15 +1094,25 @@ async function handleFile(e){
   var img=document.createElement('img'); img.className='fakeimg';
   img.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
   img.src=URL.createObjectURL(file); u.appendChild(img);
-  // EXIF 추출 → 원본(촬영일 있음) / 캡쳐(없음) 판별
+
+  var mc=document.getElementById('metaCard'); mc.classList.remove('hidden');
+  var vd=document.getElementById('metaVerdict');
+  document.getElementById('metaWeek').textContent=CURRENT_WEEK+'주차 ('+rangeLabel(CURRENT_WEEK)+')';
+
+  if(source==='camera'){
+    // 카메라 강제 입력(capture)으로 들어온 사진 = 방금 직접 촬영 → 신뢰
+    uploadType='camera'; captureAt=new Date();
+    document.getElementById('metaDate').textContent=fmtDateTime(captureAt);
+    vd.className='verify-tag ok'; vd.textContent='✓ 직접 촬영 (방금)';
+    document.getElementById('metaNote').textContent='방금 카메라로 찍어 바로 올린 사진이에요.';
+    toast('직접 촬영 사진 첨부 완료');
+    return;
+  }
+  // 갤러리 → EXIF로 판별
   var exif=null; try{ exif=await exifr.parse(file); }catch(_){}
   var dto = exif && (exif.DateTimeOriginal || exif.CreateDate || exif.ModifyDate);
   if(dto){ uploadType='photo'; captureAt=new Date(dto); }
   else { uploadType='capture'; captureAt=null; }
-  // 메타데이터 카드
-  var mc=document.getElementById('metaCard'); mc.classList.remove('hidden');
-  var vd=document.getElementById('metaVerdict');
-  document.getElementById('metaWeek').textContent=CURRENT_WEEK+'주차 ('+rangeLabel(CURRENT_WEEK)+')';
   if(uploadType==='capture'){
     document.getElementById('metaDate').textContent='— (메타데이터 없음)';
     vd.className='verify-tag bad'; vd.textContent='📷 메타데이터 없음 · 멤버 확인';
@@ -1109,9 +1124,9 @@ async function handleFile(e){
     vd.className='verify-tag '+(ok?'ok':'bad');
     vd.textContent=ok?'✓ 메타데이터 인증':'⚠ 이전 주차 사진';
     document.getElementById('metaNote').textContent= ok
-      ? '촬영일이 이번 주차 안에 있어 자동 인증돼요.'
+      ? '촬영일이 이번 주차 안에 있어 자동 확인돼요.'
       : '촬영일이 이번 주차를 벗어났어요. 멤버 확인이 필요해요.';
-    toast('원본 사진 · 촬영일 자동 확인됨');
+    toast('갤러리 사진 첨부 · 촬영일 확인됨');
   }
 }
 async function submitCertify(){
@@ -1141,7 +1156,7 @@ async function submitCertify(){
   var fk=document.querySelector('#uploader .fakeimg'); if(fk) fk.remove();
   document.getElementById('metaCard').classList.add('hidden');
   document.getElementById('certifyMemo').value='';
-  document.getElementById('photoInput').value='';
+  document.getElementById('photoCam').value=''; document.getElementById('photoGal').value='';
   await refreshGroup(); await refreshFeed();
   setTimeout(function(){ go('home'); }, 700);
 }
@@ -1184,6 +1199,7 @@ async function loadFeed(){
 }
 async function refreshFeed(){ await loadFeed(); renderFeed(); }
 function certVerdict(pt, capIso){
+  if(pt==='camera') return {cls:'ok', tag:'✓ 직접 촬영', date: capIso?fmtDateTime(new Date(capIso)):'방금 촬영'};
   if(pt==='capture') return {cls:'bad', tag:'📷 메타데이터 없음', date:'— (메타데이터 없음)'};
   var d=capIso ? new Date(capIso) : null;
   var ok=d && inWeek(d, CURRENT_WEEK);
