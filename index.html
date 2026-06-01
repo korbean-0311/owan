@@ -1100,9 +1100,9 @@ async function handleFile(e){
   document.getElementById('metaWeek').textContent=CURRENT_WEEK+'주차 ('+rangeLabel(CURRENT_WEEK)+')';
   if(uploadType==='capture'){
     document.getElementById('metaDate').textContent='— (메타데이터 없음)';
-    vd.className='verify-tag bad'; vd.textContent='📷 캡쳐 사진 · 확인 필요';
-    document.getElementById('metaNote').textContent='스크린샷·공유 이미지는 촬영 메타데이터가 없어요. 멤버가 직접 확인 후 승인해줘요.';
-    toast('캡쳐 사진 · 멤버 확인이 필요해요');
+    vd.className='verify-tag bad'; vd.textContent='📷 메타데이터 없음 · 멤버 확인';
+    document.getElementById('metaNote').textContent='촬영 메타데이터가 없어요 (휴대폰·메신저가 제거했을 수 있어요). 멤버 2명 승인으로 인증돼요.';
+    toast('사진 첨부 · 멤버 승인이 필요해요');
   } else {
     var ok=inWeek(captureAt, CURRENT_WEEK);
     document.getElementById('metaDate').textContent=fmtDateTime(captureAt);
@@ -1184,7 +1184,7 @@ async function loadFeed(){
 }
 async function refreshFeed(){ await loadFeed(); renderFeed(); }
 function certVerdict(pt, capIso){
-  if(pt==='capture') return {cls:'bad', tag:'📷 캡쳐 · 확인 필요', date:'— (메타데이터 없음)'};
+  if(pt==='capture') return {cls:'bad', tag:'📷 메타데이터 없음', date:'— (메타데이터 없음)'};
   var d=capIso ? new Date(capIso) : null;
   var ok=d && inWeek(d, CURRENT_WEEK);
   return ok ? {cls:'ok', tag:'✓ 메타데이터 인증', date:fmtDateTime(d)}
