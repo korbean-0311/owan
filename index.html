@@ -36,22 +36,25 @@
     font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic",sans-serif;
     background:#05070a;
     color:var(--text);
-    display:flex; justify-content:center; align-items:center;
-    min-height:100vh; padding:24px 0;
+    display:flex; justify-content:center;
+    min-height:100vh;
   }
 
-  /* ── 모바일 프레임 ─────────────── */
+  /* ── 모바일: 전체화면 ─────────────── */
   .phone{
-    width:390px; height:844px; background:var(--bg);
-    border-radius:42px; border:10px solid #000; box-shadow:var(--shadow);
+    width:100%; height:100dvh; background:var(--bg);
     position:relative; overflow:hidden; display:flex; flex-direction:column;
+    padding-top: env(safe-area-inset-top);
   }
-  .notch{position:absolute; top:0; left:50%; transform:translateX(-50%);
-    width:150px; height:28px; background:#000;
-    border-bottom-left-radius:16px; border-bottom-right-radius:16px; z-index:50;}
-  .statusbar{height:46px; flex:0 0 46px; display:flex; align-items:center;
-    justify-content:space-between; padding:6px 24px 0 26px; font-size:13px; font-weight:600;}
-  .statusbar .right{display:flex; gap:6px; align-items:center; font-size:12px;}
+  /* ── 데스크톱: 가운데 폰 프레임(노치 없음) ── */
+  @media (min-width:480px){
+    body{ align-items:center; padding:24px 0; }
+    .phone{
+      width:390px; height:844px; max-height:calc(100dvh - 48px);
+      border-radius:42px; border:10px solid #000; box-shadow:var(--shadow);
+      padding-top:0;
+    }
+  }
 
   .screens{flex:1; position:relative; overflow:hidden;}
   .screen{position:absolute; inset:0; display:flex; flex-direction:column;
@@ -232,8 +235,9 @@
   .end-hero h1{margin:10px 0 4px; font-size:26px;}
 
   /* ── 탭바 ─────────────── */
-  .tabbar{flex:0 0 70px; display:flex; align-items:center; justify-content:space-around;
-    border-top:1px solid var(--line); background:rgba(20,24,30,.96); padding-bottom:6px;}
+  .tabbar{flex:0 0 auto; display:flex; align-items:center; justify-content:space-around;
+    border-top:1px solid var(--line); background:rgba(20,24,30,.96);
+    padding:6px 0 calc(8px + env(safe-area-inset-bottom));}
   .tab{display:flex; flex-direction:column; align-items:center; gap:3px;
     color:var(--text-mute); font-size:11px; cursor:pointer; flex:1; padding-top:8px;}
   .tab .ic{font-size:21px;}
@@ -272,9 +276,6 @@
 </head>
 <body>
 <div class="phone">
-  <div class="notch"></div>
-  <div class="statusbar"><span>9:41</span><span class="right">📶 🔋</span></div>
-
   <div class="screens">
 
     <!-- ════════ 온보딩 ════════ -->
