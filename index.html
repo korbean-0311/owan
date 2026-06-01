@@ -745,18 +745,6 @@ var members = [];   // 그룹 멤버 (DB에서 로드)
 var feed = [];      // 인증 피드 (DB에서 로드)
 var COLORS = ['#39e08a','#5ab0ff','#ffd24a','#ff9f6e','#c69bff','#ff7aa8','#7ad9c0','#f6c177'];
 
-/* 사진 검증: 원본=메타데이터 판정 / 캡쳐=멤버 직접 확인 */
-function verifyPhoto(f){
-  if(f.type==='capture'){
-    return {cls:'bad', tag:'📷 캡쳐 사진 · 확인 필요',
-      dateText:'— (메타데이터 없음)',
-      note:'스크린샷·공유 이미지는 촬영 메타데이터가 없어요. 멤버가 직접 확인 후 승인해주세요.'};
-  }
-  var ok = inWeek(f.capture, CURRENT_WEEK);
-  return ok
-    ? {cls:'ok',  tag:'✓ 메타데이터 인증', dateText:fmtDateTime(f.capture), note:'촬영일이 이번 주차 안에 있어 자동 인증돼요.'}
-    : {cls:'bad', tag:'⚠ 이전 주차 사진', dateText:fmtDateTime(f.capture), note:'촬영일이 이번 주차를 벗어났어요. 멤버 확인이 필요해요.'};
-}
 function fmtDateTime(c){
   if(!c) return '— (메타데이터 없음)';
   return c.getFullYear()+'.'+String(c.getMonth()+1).padStart(2,'0')+'.'+String(c.getDate()).padStart(2,'0')+
@@ -1324,12 +1312,7 @@ function renderAdminUI(){
 }
 
 /* ──────── 초대코드 ──────── */
-var INVITE_CODE = 'OWAN-A7K3-PQ9X-B2MN';
-function genCode(){
-  var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 헷갈리는 0/O/1/I 제외
-  function grp(){ var s=''; for(var i=0;i<4;i++){ s+=chars.charAt(Math.floor(Math.random()*chars.length)); } return s; }
-  return 'OWAN-'+grp()+'-'+grp()+'-'+grp();
-}
+var INVITE_CODE = '';
 function renderInviteCode(){
   document.getElementById('adminCode').textContent = INVITE_CODE;
   document.getElementById('meCode').textContent = INVITE_CODE;
