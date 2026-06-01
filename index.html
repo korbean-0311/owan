@@ -92,9 +92,10 @@
   .btn.outline{background:transparent; border:1px solid var(--line); color:var(--text);}
   .btn.sm{padding:11px 16px; font-size:14px; width:auto; border-radius:11px;}
 
-  input.field{width:100%; border:1px solid var(--line); background:var(--surface-2);
+  input.field{width:100%; min-width:0; border:1px solid var(--line); background:var(--surface-2);
     color:var(--text); border-radius:13px; padding:15px 16px; font-size:16px; outline:none;}
   input.field:focus{border-color:var(--accent);}
+  input.field[type="date"], input.field[type="number"]{ -webkit-appearance:none; appearance:none; }
   label.lbl{display:block; font-size:13px; color:var(--text-dim); margin:0 0 8px 2px;}
 
   /* ── 온보딩 ─────────────── */
@@ -704,6 +705,14 @@
 const db = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 var joiningGroup = null;   // 온보딩 중 가입할 그룹
 
+/* 닉네임(한글·공백·이모지 포함)을 안전한 ASCII 이메일로 인코딩 → Supabase Auth용.
+   닉네임이 곧 로그인 ID라 결정적(deterministic)이어야 함 (가입·로그인 동일 변환). */
+function nickToEmail(nick){
+  var hex='';
+  for(var i=0;i<nick.length;i++){ var h=nick.charCodeAt(i).toString(16); while(h.length<4) h='0'+h; hex+=h; }
+  return 'u'+hex+'@owan.co';
+}
+
 /* ──────── 달력 동기화 ──────── */
 var TODAY = new Date();                     // 실제 오늘
 var SEASON_START = new Date(2026,4,11);     // 시즌 시작일 (방장이 설정) ※ month 0-index
@@ -827,7 +836,7 @@ function pickGoal(n){
   document.querySelectorAll('.goal-opt').forEach(function(o){ o.classList.toggle('sel', +o.dataset.goal===n); });
 }
 async function finishOnboard(){
-  var email = state.nickname.toLowerCase()+'@owan.co';
+  var email = nickToEmail(state.nickname);
   var su = await db.auth.signUp({ email:email, password:state.password });
   if(su.error){
     toast(/already|registered/i.test(su.error.message) ? '이미 사용 중인 닉네임이에요' : '가입 실패: '+su.error.message);
@@ -880,7 +889,7 @@ async function doLogin(){
   var nv=document.getElementById('loginNick').value.trim();
   var pw=document.getElementById('loginPw').value;
   if(!nv || !pw){ toast('닉네임과 비밀번호를 입력해주세요'); return; }
-  var email=nv.toLowerCase()+'@owan.co';
+  var email=nickToEmail(nv);
   var r=await db.auth.signInWithPassword({ email:email, password:pw });
   if(r.error){ toast('로그인 실패 · 닉네임/비밀번호를 확인해주세요'); return; }
   await loadSession();
