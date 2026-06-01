@@ -99,7 +99,7 @@
   label.lbl{display:block; font-size:13px; color:var(--text-dim); margin:0 0 8px 2px;}
 
   /* ── 온보딩 ─────────────── */
-  .onb{flex:1; display:flex; flex-direction:column; padding:36px 26px 30px;}
+  .onb{flex:1; display:flex; flex-direction:column; padding:36px 26px calc(54px + env(safe-area-inset-bottom));}
   .onb .logo{font-size:40px; font-weight:800; letter-spacing:-1px; margin-top:30px;}
   .onb .logo span{color:var(--accent);}
   .onb .tag{color:var(--text-dim); margin-top:8px; font-size:15px; line-height:1.5;}
@@ -283,8 +283,10 @@
     <section class="screen active" data-screen="onboard">
       <div class="onb">
         <div class="onb-step active" data-step="0">
-          <div class="logo" onclick="logoTap()">오<span>운</span>완</div>
-          <div class="tag" style="margin-left:2px;">by WFL</div>
+          <div style="display:flex; align-items:baseline; gap:10px;">
+            <div class="logo" onclick="logoTap()">오<span>운</span>완</div>
+            <div class="tag" style="margin:0;">by WFL</div>
+          </div>
           <div class="spacer"></div>
           <label class="lbl">초대 코드</label>
           <input class="field" id="inviteCode" placeholder="예: OWAN-XXXX-XXXX-XXXX" maxlength="24" style="text-align:center; letter-spacing:1px;"/>
@@ -821,11 +823,17 @@ function onbCreateNext(){
   showOnbStep(1);
 }
 // 닉네임 + 비밀번호 → 목표 단계로
-function onbAccountNext(){
+async function onbAccountNext(){
   var nv = document.getElementById('nickname').value.trim();
   var pw = document.getElementById('password').value;
   if(!nv){ toast('닉네임을 입력해주세요'); return; }
   if(pw.length<6){ toast('비밀번호는 6자 이상으로 설정해주세요'); return; }
+  // 여기서 바로 계정 생성 → 닉네임 중복이면 즉시 차단 (목표 단계로 못 넘어감)
+  var su = await db.auth.signUp({ email:nickToEmail(nv), password:pw });
+  if(su.error){
+    toast(/already|registered/i.test(su.error.message) ? '이미 사용 중인 닉네임이에요' : '가입 실패: '+su.error.message);
+    return;
+  }
   state.nickname = nv; state.password = pw;
   showOnbStep(2);
   document.getElementById('onbSeasonNo').textContent = SEASON_NO;
@@ -846,12 +854,7 @@ function pickGoal(n){
   document.querySelectorAll('.goal-opt').forEach(function(o){ o.classList.toggle('sel', +o.dataset.goal===n); });
 }
 async function finishOnboard(){
-  var email = nickToEmail(state.nickname);
-  var su = await db.auth.signUp({ email:email, password:state.password });
-  if(su.error){
-    toast(/already|registered/i.test(su.error.message) ? '이미 사용 중인 닉네임이에요' : '가입 실패: '+su.error.message);
-    return;
-  }
+  // 계정은 이미 '계정 만들기' 단계에서 생성됨 → 여기선 그룹 생성/참여만
   var rpc;
   if(onbMode==='create'){
     rpc = await db.rpc('create_group', {
