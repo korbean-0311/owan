@@ -444,6 +444,7 @@
         <p class="sub">사진을 올리면 단톡방에 자동 공유되고, 멤버 승인 후 완료돼요.</p>
       </div>
       <div class="scroll">
+        <div id="certifyForm">
         <input type="file" id="photoCam" accept="image/*" capture="environment" style="display:none" onchange="handleFile(event,'camera')"/>
         <input type="file" id="photoGal" accept="image/*" style="display:none" onchange="handleFile(event,'gallery')"/>
         <div class="uploader" id="uploader" onclick="document.getElementById('photoCam').click()">
@@ -481,6 +482,13 @@
         </div>
 
         <button class="btn" id="submitCertify" onclick="submitCertify()">인증 요청 보내기</button>
+        </div>
+        <div id="certifyDone" class="hidden" style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px; padding:60px 10px;">
+          <div style="font-size:56px;">🎉</div>
+          <h2 style="margin:0;">이번 주 오운완 끝!</h2>
+          <p class="muted" id="certifyDoneMsg" style="margin:0; line-height:1.5;">이번 주 목표를 모두 달성했어요.<br/>다음 주에 또 만나요 💪</p>
+          <button class="btn" style="margin-top:18px;" onclick="go('home')">홈으로</button>
+        </div>
       </div>
     </section>
 
@@ -783,7 +791,18 @@ function go(name){
   document.getElementById('tabbar').classList.toggle('hidden', name==='splash' || name==='onboard' || name==='login' || name==='seasonEnd' || name==='newSeason');
   if(name==='home' || name==='rank') refreshGroup();
   if(name==='feed') refreshFeed();
-  if(name==='certify'){ var sp=document.getElementById('sharePreviewCount'); if(sp) sp.textContent=(state.done+1)+'/'+state.goal; }
+  if(name==='certify'){
+    var tgt = state.leverageActive ? state.goal*2 : state.goal;
+    var doneAll = state.done >= tgt;
+    document.getElementById('certifyForm').classList.toggle('hidden', doneAll);
+    document.getElementById('certifyDone').classList.toggle('hidden', !doneAll);
+    if(doneAll){
+      document.getElementById('certifyDoneMsg').innerHTML = (state.leverageActive
+        ? '레버리지 합산 목표('+tgt+'회)를 다 채웠어요!' : '주 '+state.goal+'회 목표를 모두 달성했어요!')+'<br/>다음 주에 또 만나요 💪';
+    } else {
+      var sp=document.getElementById('sharePreviewCount'); if(sp) sp.textContent=(state.done+1)+'/'+state.goal;
+    }
+  }
   if(name==='seasonEnd') renderSeasonEnd();
   if(name==='newSeason') renderSeasonPreview();
   if(name==='records') renderRecords();
@@ -1150,6 +1169,8 @@ async function handleFile(e, source){
 }
 async function submitCertify(){
   if(!state.membershipId){ toast('로그인이 필요해요'); return; }
+  var tgt = state.leverageActive ? state.goal*2 : state.goal;
+  if(state.done >= tgt){ toast('이번 주 목표를 이미 다 채웠어요! 🎉'); go('certify'); return; }
   if(!selectedFile){ toast('운동 사진을 올려주세요'); return; }
   var memo=document.getElementById('certifyMemo').value.trim() || null;
   // 1) Storage 업로드
