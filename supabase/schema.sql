@@ -147,6 +147,8 @@ create policy wr_update on public.weekly_records for update using (public.owns_m
 -- certifications: 로그인 읽기 / 본인 멤버십 것만 생성
 create policy cf_read   on public.certifications for select using (auth.role()='authenticated');
 create policy cf_insert on public.certifications for insert with check (public.owns_membership(membership_id));
+drop policy if exists cf_delete on public.certifications;
+create policy cf_delete on public.certifications for delete using (public.owns_membership(membership_id));
 
 -- approvals: 로그인 읽기 / 본인이 승인자일 때만 생성·삭제
 create policy ca_read   on public.certification_approvals for select using (auth.role()='authenticated');
