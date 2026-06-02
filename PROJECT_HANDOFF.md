@@ -1,0 +1,84 @@
+# 오운완 (오늘의 운동 완료) — 프로젝트 핸드오프
+
+새 대화에서 이어서 작업할 때 이 문서를 먼저 읽으면 됩니다. (프로젝트 폴더: `C:\Users\ryanl\Desktop\toy_project\OOO`)
+
+---
+
+## 1. 한 줄 요약
+학생 모임이 **서로 운동 인증**하는 **모바일 전용 웹앱(PWA)**. 사진 인증 → 단톡방 링크 공유 → 멤버 승인 → 주간 목표/벌금 집계. 시즌제(8주 등) + 방장 관리.
+
+## 2. 기술 스택
+- **프론트엔드**: 단일 `index.html` (바닐라 HTML/CSS/JS, 외부 프레임워크 없음). CDN: `@supabase/supabase-js@2`, `exifr@7`.
+- **백엔드**: **Supabase** (Postgres + Auth + Storage). 브라우저에서 `supabase-js`로 직접 호출 (서버 코드 없음).
+- **배포**: **GitHub Pages** (정적). `git push` → 약 1분 후 자동 빌드.
+- **로컬 개발**: `.claude/serve.js` (Node 정적 서버, 포트 4321). `launch.json`에 "owan"으로 등록.
+
+## 3. 접속/계정 정보
+- **라이브 URL**: https://korbean-0311.github.io/owan/
+- **GitHub**: repo `github.com/korbean-0311/owan` (public). gh CLI가 `korbean-0311`로 로그인돼 있어 `git push`로 배포.
+- **Supabase**: 프로젝트 ref `tfjjvmsxefgsjiaoyble`. 키는 `supabase-config.js` (publishable 키 — 공개 안전, RLS로 보호). **service_role/secret 키는 절대 커밋 금지.**
+- 키 종류: publishable(`sb_publishable_...`) 사용. supabase-js v2가 이 키 지원.
+
+## 4. 핵심 규칙 (도메인 로직)
+- **시즌 = N주**(방장이 시작일+주차수 설정). 8주 끝나면 새 시즌.
+- 시즌 시작 시 **주당 목표 3/4/5회** 선택, **시즌 중 변경 불가**(목표 변경 기능 없음).
+- 미달성 주차 벌금: 3회→3000 / 4회→2000 / 5회→1000원.
+- **연속 실패 누진**: 2배씩 (1→2→4→8…). 성공하면 리셋.
+- **개인 누적 벌금 상한 10만원**.
+- **레버리지**: 시즌당 2회. 이번 주를 다음 주와 합쳐 **2×목표**로 판정. 마지막 주차 불가. 실패 시 두 주 연속 미달로 누진.
+- **면제(방장)**: 특정 멤버의 특정 주차 면제 → 누진 계산에서 **건너뜀(중립)**.
+- **인증**: 사진 업로드 → **멤버 2명 승인**해야 "완료"로 집계(홈/주차기록/벌금에 반영). 승인 전(대기)은 카운트 안 됨.
+- **초대코드**: 그룹 공용 코드 + 정원. 방장이 재발급 가능. **새 그룹 만들기는 숨김**(온보딩 로고 5탭 또는 `?create`).
+- **로그인**: 닉네임+비밀번호. 닉네임을 `nickToEmail()`로 hex 인코딩한 이메일(`u<hex>@owan.co`)로 Supabase Auth. (한글 닉 지원 위함. ⚠️ Supabase에서 **Confirm email은 OFF 필수**, 최소 비번 6자.)
+
+## 5. 데이터 모델 (Supabase) — `supabase/schema.sql` 참조
+- `groups`: invite_code, capacity, season_no, season_start, total_weeks, created_by
+- `profiles`: id(=auth.users), nickname(unique)
+- `memberships`: group_id, profile_id, weekly_goal, fine, is_admin, leverage_left, **color**(가입시 고정 배정), joined_at
+- `weekly_records`: membership_id, week_no, done_count, status(pending/done/fail/exempt), leveraged
+- `certifications`: membership_id, week_no, photo_url, photo_type(camera/photo/capture), capture_at, memo, status(pending/approved), approvals
+- `certification_approvals`: certification_id, approver_id (트리거로 approvals 집계, **2명 이상이면 status=approved**)
+- `exemptions`: membership_id, week_no
+
+**RPC (SECURITY DEFINER, 보안 핵심)**: create_group, join_group(둘 다 색 배정 pick_color 호출), set_my_goal, use_leverage, kick_member, set_capacity, regenerate_code, exempt_week, remove_exemption, start_new_season, pick_color, gen_invite_code.
+- **is_admin은 RPC로만 부여** (멤버십 직접 insert/update 차단 → 자기지정 불가).
+- RLS: memberships 쓰기는 RPC만. weekly_records/certifications는 본인 것만. certifications **cf_delete**(본인 삭제) 있음.
+
+**계산 방식(중요)**: 벌금/주차상태는 **저장하지 않고 프론트 `deriveSeason()`이 기록에서 즉석 계산**(누진·면제·레버리지·상한). done_count는 **approved 인증만** 카운트(`loadGroupData`).
+
+## 6. 색상 시스템
+- 멤버 아바타 색 = **가입 시 DB(`memberships.color`)에 영구 저장**. `pick_color(group)`이 그룹 내 미사용 색을 랜덤 배정.
+- 팔레트 15색: `['#ef5350','#ec407a','#ab47bc','#42a5f5','#26c6da','#26a69a','#66bb6a','#9ccc65','#d4e157','#ffca28','#ffa726','#ff7043','#a1887f','#ffffff','#212121']` (파랑3 + 갈색/흰색/검정 포함).
+- 프론트: `loadGroupData`가 DB color를 `memberColors{nickname:color}` 맵에 채움 → `colorFor(name)`이 전 화면(홈/마이/피드/랭킹/멤버) 동일 색 사용. `textOn(hex)`로 배경 명도에 따라 글자색(흰/검정) 자동.
+
+## 7. 화면 구성 (data-screen)
+splash(로딩) · onboard(초대코드→계정→목표 / 새그룹설정) · login · home · certify(사진찍기/사진선택 + 메타검증 + 완료시 "오운완 끝!") · feed(대기/완료 토글, 내 인증 ✕ 삭제) · rank(공동순위) · me(마이, 방장이면 방장메뉴) · seasonEnd · newSeason · records(주차 달력) · members · exempt. 하단 탭바 + 사진 뷰어 오버레이.
+
+## 8. 로컬 개발 & 검증 방법
+- 서버: Claude_Preview MCP `preview_start({name:"owan"})` → http://localhost:4321
+- ⚠️ **screenshot 도구는 Supabase 상시연결로 타임아웃 잦음** → `preview_eval`로 DOM/상태를 읽어 검증 (예: `document.querySelector('.screen.active').dataset.screen`, 함수 직접 호출).
+- 로그인 세션이 localStorage에 남아 자동 로그인됨.
+
+## 9. 배포 방법
+1. `git add -A && git commit -m "..."` (커밋 메시지 끝에 Co-Authored-By 라인)
+2. `git push origin main`
+3. ~1분 후 Pages 빌드 완료. 확인: `curl -s "https://korbean-0311.github.io/owan/?cb=$RANDOM" | grep '<찾을 문자열>'` 폴링(백그라운드 until 루프).
+- CDN 전파가 엣지마다 달라 직후 1회는 옛 버전 나올 수 있음 → 몇 번 재확인.
+
+## 10. DB 변경 시 (마이그레이션)
+- 전체 초기화: `supabase/schema.sql` 재실행(drop&recreate — **데이터 전부 삭제**). 후 Auth→Users 정리.
+- 데이터 보존 변경: 별도 마이그레이션 SQL 작성(ALTER/CREATE OR REPLACE/UPDATE). 예: `supabase/migration_colors.sql`, `migration_colors2.sql`.
+- publishable 키로는 DDL 불가 → **사용자가 SQL Editor에서 직접 실행**해야 함. 스키마 변경 시 프론트가 새 컬럼을 select하면 컬럼 생성 전엔 에러 → **마이그레이션 먼저, 배포 나중**.
+
+## 11. 주요 한계/주의 (gotcha)
+- **모바일 웹은 카메라 사진의 EXIF를 제거** → 촬영일 자동검증 불가. 그래서 "사진 찍기(capture 강제)=직접촬영 신뢰배지", "사진 선택(갤러리)=EXIF 있으면 인증/없으면 메타없음·멤버확인". 진짜 검증은 2명 승인.
+- iOS는 "사진 선택" 시 액션시트(보관함/찍기/파일)가 기본 — 웹에선 보관함 바로 열기 강제 불가.
+- **카톡 공유**: Web Share API(`navigator.share`, text만) — API키 불필요. 링크(`?cert=`/`?join=`) 공유 → 받은 사람은 카톡 인앱 브라우저에서 1회 로그인 필요(인앱 브라우저 샌드박스). 데스크톱은 링크 복사 폴백.
+- 현재 다중기기 실시간 동기화 없음(새로고침/화면진입 시 refresh). 주차 마감/벌금은 derive라 cron 불필요.
+
+## 12. 진행 상태 / 다음 후보
+- ✅ 완료: 전 기능 구현 + Supabase 연동 + PWA + GitHub Pages 배포 + 베타 피드백 다수 반영. 9명 베타테스트 중.
+- 다음 후보(미구현): 카톡 실연동(현재 링크공유로 충분), 다중기기 실시간(Supabase Realtime), 시즌 종료 자동화(현재 방장 수동/derive), 알림(현재 없음), 코드 리팩토링(파일 분리).
+
+## 13. 메모리
+- 영구 메모리: `C:\Users\ryanl\.claude\projects\C--Users-ryanl-Desktop-toy-project-OOO\memory\owan-project.md` (새 세션 자동 로드). 이 핸드오프와 함께 참고.
