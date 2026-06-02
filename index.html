@@ -755,7 +755,14 @@ var state = { nickname:"", goal:4, done:0, isAdmin:false, leverageLeft:2, levera
 
 var members = [];   // 그룹 멤버 (DB에서 로드)
 var feed = [];      // 인증 피드 (DB에서 로드)
-var COLORS = ['#39e08a','#5ab0ff','#ffd24a','#ff9f6e','#c69bff','#ff7aa8','#7ad9c0','#f6c177'];
+var COLORS = ['#39e08a','#5ab0ff','#ffd24a','#ff9f6e','#c69bff','#ff7aa8','#7ad9c0','#f6c177',
+  '#4dd0e1','#f06292','#9575cd','#ff6b6b','#cddc39','#4db6ac'];
+/* 닉네임 기반 결정적 색상 — 모든 화면에서 같은 멤버는 같은 색 */
+function colorFor(name){
+  name=name||'?'; var h=0;
+  for(var i=0;i<name.length;i++){ h=(h*31 + name.charCodeAt(i))>>>0; }
+  return COLORS[h % COLORS.length];
+}
 
 function fmtDateTime(c){
   if(!c) return '— (메타데이터 없음)';
@@ -873,9 +880,12 @@ function applyIdentity(){
   var ini = state.nickname.charAt(0);
   document.getElementById('hNick').innerHTML = state.nickname+'<span class="suffix">님</span>';
   document.getElementById('hGoalPill').textContent = '주 '+state.goal+'회';
+  var col=colorFor(state.nickname);
   document.getElementById('hAvatar').textContent = ini;
+  document.getElementById('hAvatar').style.background = col;
   document.getElementById('meNick').textContent = state.nickname;
   document.getElementById('meAvatar').textContent = ini;
+  document.getElementById('meAvatar').style.background = col;
   document.getElementById('shareNick').textContent = state.nickname;
   var mg=document.getElementById('meGoalPill'); if(mg) mg.textContent='주 '+state.goal+'회';
 }
@@ -999,7 +1009,7 @@ async function loadGroupData(){
     var d=deriveSeason(recs, r.weekly_goal, CURRENT_WEEK, TOTAL_WEEKS);
     var cur=recs[CURRENT_WEEK]||{};
     return { membershipId:r.id, profileId:r.profile_id, name:(r.profiles&&r.profiles.nickname)||'?',
-      color:COLORS[i%COLORS.length], goal:r.weekly_goal, fine:d.fine, done:cur.done_count||0,
+      color:colorFor((r.profiles&&r.profiles.nickname)||'?'), goal:r.weekly_goal, fine:d.fine, done:cur.done_count||0,
       me:r.profile_id===state.myUid, is_admin:r.is_admin, leverageLeft:r.leverage_left,
       _statuses:d.statuses, _recs:recs };
   });
@@ -1248,7 +1258,7 @@ function renderFeed(){
     return '<div class="card tight" style="position:relative;">'+
       (f.mine ? '<div class="cert-del" onclick="deleteCert(\''+f.id+'\')">✕</div>' : '')+
       '<div class="feed-item">'+
-        '<div class="avatar" style="background:'+(f.mine?'var(--gold)':COLORS[(f.name.charCodeAt(0))%COLORS.length])+'">'+f.name.charAt(0)+'</div>'+
+        '<div class="avatar" style="background:'+colorFor(f.name)+'">'+f.name.charAt(0)+'</div>'+
         '<div style="flex:1; min-width:0;">'+
           '<div class="row"><b style="font-size:14px;">'+f.name+'</b><span class="mute2 small">'+relTime(f.created_at)+'</span></div>'+
           '<div class="muted small" style="margin-top:2px;">'+f.memo+'</div>'+
