@@ -1034,7 +1034,7 @@ async function loadGroupData(){
   memberColors = {};   // 가입 순서대로 고유색 재배정
   members=rows.map(function(r,i){
     var nm=(r.profiles&&r.profiles.nickname)||'?';
-    var col=COLORS[i % COLORS.length];
+    var col=COLORS[(i*7) % COLORS.length];   // 무지개 방지: 7(↔15 서로소)로 흩뿌려 겹침 없이 배정
     memberColors[nm]=col;
     var recs=recsBy[r.id]||{};
     var d=deriveSeason(recs, r.weekly_goal, CURRENT_WEEK, TOTAL_WEEKS);
