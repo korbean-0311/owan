@@ -52,7 +52,9 @@
 - 프론트: `loadGroupData`가 DB color를 `memberColors{nickname:color}` 맵에 채움 → `colorFor(name)`이 전 화면(홈/마이/피드/랭킹/멤버) 동일 색 사용. `textOn(hex)`로 배경 명도에 따라 글자색(흰/검정) 자동.
 
 ## 7. 화면 구성 (data-screen)
-splash(로딩) · onboard(초대코드→계정→목표 / 새그룹설정) · login · home · certify(사진찍기/사진선택 + 메타검증 + 완료시 "오운완 끝!") · feed(대기/완료 토글, 내 인증 ✕ 삭제) · rank(공동순위) · me(마이, 방장이면 방장메뉴) · seasonEnd · newSeason · records(주차 달력) · members · exempt. 하단 탭바 + 사진 뷰어 오버레이.
+splash(로딩) · onboard(초대코드→계정→목표 / 새그룹설정) · login · home · certify(사진찍기/사진선택 + 메타검증 + 완료시 "오운완 끝!") · feed(대기/완료 토글, 내 인증 ✕ 삭제) · rank(공동순위) · me(마이, 방장이면 방장메뉴) · seasonEnd · newSeason · records(주차 달력) · members · exempt. 사진 뷰어 오버레이.
+
+**레이아웃 핵심**: 모바일 전체화면(데스크톱만 폰 프레임, `@media min-width:480px`). 가짜 노치/상태바 없음. **홈 상단바(.home-head)와 하단 탭바(.tabbar) 둘 다 `position:absolute` 오버레이 + `backdrop-filter` 프로스티드(반투명 비침)** → `.scroll`에 상(홈 90px)·하(calc(84px+safe)) 패딩으로 콘텐츠가 그 뒤로 스크롤. 탭바 가운데 + 버튼은 돌출 없이 세로 중앙(46px). safe-area-inset 반영(노치/홈인디케이터). 오버스크롤(러버밴드) 차단.
 
 ## 8. 로컬 개발 & 검증 방법
 - 서버: Claude_Preview MCP `preview_start({name:"owan"})` → http://localhost:4321
