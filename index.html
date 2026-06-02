@@ -61,7 +61,7 @@
     opacity:0; pointer-events:none; transform:translateX(12px);
     transition:opacity .22s ease, transform .22s ease; overflow:hidden;}
   .screen.active{opacity:1; pointer-events:auto; transform:none;}
-  .scroll{flex:1; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; padding:8px 20px 24px;}
+  .scroll{flex:1; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; padding:8px 20px calc(84px + env(safe-area-inset-bottom));}
   .scroll::-webkit-scrollbar{width:0;}
 
   /* ── 공통 ─────────────── */
@@ -239,11 +239,12 @@
   .end-hero h1{margin:10px 0 4px; font-size:26px;}
 
   /* ── 탭바 ─────────────── */
-  .tabbar{flex:0 0 auto; display:flex; align-items:center; justify-content:space-around;
+  .tabbar{position:absolute; left:0; right:0; bottom:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-around;
     border-top:1px solid rgba(255,255,255,.06);
-    background:rgba(20,24,30,.4);
-    backdrop-filter:blur(16px) saturate(140%);
-    -webkit-backdrop-filter:blur(16px) saturate(140%);
+    background:rgba(20,24,30,.32);
+    backdrop-filter:blur(18px) saturate(150%);
+    -webkit-backdrop-filter:blur(18px) saturate(150%);
     padding:6px 0 calc(8px + env(safe-area-inset-bottom));}
   .tab{display:flex; flex-direction:column; align-items:center; gap:3px;
     color:var(--text-mute); font-size:11px; cursor:pointer; flex:1; padding-top:8px;}
