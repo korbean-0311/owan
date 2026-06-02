@@ -178,9 +178,9 @@ end; $$;
 -- 가입 시 색 배정: 그룹 내 미사용 색을 무작위로 (다 차면 무작위 재사용)
 create or replace function public.pick_color(g uuid) returns text
 language sql security definer set search_path=public as $$
-  with pal(c) as (values ('#ef5350'),('#ec407a'),('#ab47bc'),('#7e57c2'),('#5c6bc0'),
-    ('#42a5f5'),('#29b6f6'),('#26c6da'),('#26a69a'),('#66bb6a'),('#9ccc65'),('#d4e157'),
-    ('#ffca28'),('#ffa726'),('#ff7043'))
+  with pal(c) as (values ('#ef5350'),('#ec407a'),('#ab47bc'),('#42a5f5'),('#26c6da'),
+    ('#26a69a'),('#66bb6a'),('#9ccc65'),('#d4e157'),('#ffca28'),('#ffa726'),('#ff7043'),
+    ('#a1887f'),('#ffffff'),('#212121'))
   select coalesce(
     (select c from pal where c not in (select color from public.memberships where group_id=g and color is not null) order by random() limit 1),
     (select c from pal order by random() limit 1));
