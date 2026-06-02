@@ -40,6 +40,7 @@ create table public.memberships (
   fine          int  not null default 0,        -- 누적 벌금 (표시 시 10만원 상한)
   is_admin      boolean not null default false, -- 방장 여부 (RPC로만 부여)
   leverage_left int  not null default 2,        -- 시즌당 남은 레버리지
+  color         text,                           -- 가입 시 배정된 고정 아바타 색
   joined_at     timestamptz default now(),
   unique (group_id, profile_id)
 );
@@ -174,6 +175,17 @@ begin
   return 'OWAN-' || s;
 end; $$;
 
+-- 가입 시 색 배정: 그룹 내 미사용 색을 무작위로 (다 차면 무작위 재사용)
+create or replace function public.pick_color(g uuid) returns text
+language sql security definer set search_path=public as $$
+  with pal(c) as (values ('#ef5350'),('#ec407a'),('#ab47bc'),('#7e57c2'),('#5c6bc0'),
+    ('#42a5f5'),('#29b6f6'),('#26c6da'),('#26a69a'),('#66bb6a'),('#9ccc65'),('#d4e157'),
+    ('#ffca28'),('#ffa726'),('#ff7043'))
+  select coalesce(
+    (select c from pal where c not in (select color from public.memberships where group_id=g and color is not null) order by random() limit 1),
+    (select c from pal order by random() limit 1));
+$$;
+
 -- 그룹 생성 → 생성자가 방장(is_admin=true)
 create or replace function public.create_group(
   p_name text, p_nickname text, p_capacity int,
@@ -192,8 +204,8 @@ begin
   insert into public.groups(name, invite_code, capacity, season_no, season_start, total_weeks, created_by)
     values (p_name, v_code, p_capacity, 1, p_season_start, p_total_weeks, v_uid)
     returning * into v_group;
-  insert into public.memberships(group_id, profile_id, weekly_goal, is_admin)
-    values (v_group.id, v_uid, p_goal, true);
+  insert into public.memberships(group_id, profile_id, weekly_goal, is_admin, color)
+    values (v_group.id, v_uid, p_goal, true, public.pick_color(v_group.id));
   return v_group;
 end; $$;
 
@@ -210,8 +222,8 @@ begin
   if v_count >= v_group.capacity then raise exception '정원이 가득 찼습니다'; end if;
   insert into public.profiles(id, nickname) values (v_uid, p_nickname)
     on conflict (id) do update set nickname = excluded.nickname;
-  insert into public.memberships(group_id, profile_id, weekly_goal, is_admin)
-    values (v_group.id, v_uid, p_goal, false)
+  insert into public.memberships(group_id, profile_id, weekly_goal, is_admin, color)
+    values (v_group.id, v_uid, p_goal, false, public.pick_color(v_group.id))
     on conflict (group_id, profile_id) do nothing;
   return v_group;
 end; $$;

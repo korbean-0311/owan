@@ -1005,9 +1005,9 @@ function deriveSeason(recs, goal, curWeek, total){
 async function loadGroupData(){
   if(!state.groupId || !state.membershipId) return;
   var mr=await db.from('memberships')
-    .select('id,weekly_goal,is_admin,leverage_left,profile_id,profiles(nickname)')
+    .select('id,weekly_goal,is_admin,leverage_left,color,profile_id,profiles(nickname)')
     .eq('group_id', state.groupId)
-    .order('joined_at', {ascending:true});   // 가입 순서 고정 → 색상 인덱스 안정
+    .order('joined_at', {ascending:true});
   var rows=mr.data||[];
   var ids=rows.map(function(r){ return r.id; });
   var recsBy={};
@@ -1034,7 +1034,7 @@ async function loadGroupData(){
   memberColors = {};   // 가입 순서대로 고유색 재배정
   members=rows.map(function(r,i){
     var nm=(r.profiles&&r.profiles.nickname)||'?';
-    var col=COLORS[(i*7) % COLORS.length];   // 무지개 방지: 7(↔15 서로소)로 흩뿌려 겹침 없이 배정
+    var col=r.color || COLORS[(i*7) % COLORS.length];   // DB 저장색(가입시 고정), 없으면 폴백
     memberColors[nm]=col;
     var recs=recsBy[r.id]||{};
     var d=deriveSeason(recs, r.weekly_goal, CURRENT_WEEK, TOTAL_WEEKS);
