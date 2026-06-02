@@ -766,12 +766,15 @@ var state = { nickname:"", goal:4, done:0, isAdmin:false, leverageLeft:2, levera
 
 var members = [];   // 그룹 멤버 (DB에서 로드)
 var feed = [];      // 인증 피드 (DB에서 로드)
-var COLORS = ['#39e08a','#5ab0ff','#ffd24a','#ff9f6e','#c69bff','#ff7aa8','#7ad9c0','#f6c177',
-  '#4dd0e1','#f06292','#9575cd','#ff6b6b','#cddc39','#4db6ac'];
-/* 닉네임 기반 결정적 색상 — 모든 화면에서 같은 멤버는 같은 색 */
+/* 최대 15명까지 서로 확실히 구분되는 15색 (가입 순서대로 배정) */
+var COLORS = ['#ef5350','#ec407a','#ab47bc','#7e57c2','#5c6bc0','#42a5f5','#29b6f6','#26c6da',
+  '#26a69a','#66bb6a','#9ccc65','#d4e157','#ffca28','#ffa726','#ff7043'];
+var memberColors = {};   // 닉네임 → 고유색 (loadGroupData에서 가입순서 인덱스로 채움)
+/* 멤버 색: 가입순서 인덱스 색이 있으면 그걸, 아직 로드 전이면 해시 폴백 */
 function colorFor(name){
-  name=name||'?'; var h=0;
-  for(var i=0;i<name.length;i++){ h=(h*31 + name.charCodeAt(i))>>>0; }
+  name=name||'?';
+  if(memberColors[name]) return memberColors[name];
+  var h=0; for(var i=0;i<name.length;i++){ h=(h*31 + name.charCodeAt(i))>>>0; }
   return COLORS[h % COLORS.length];
 }
 
@@ -955,7 +958,8 @@ async function loadSession(){
   state.leverageLeft=mr.data.leverage_left;
   if(mr.data.groups) applyGroupConfig(mr.data.groups);
   applyIdentity();
-  await Promise.all([refreshGroup(), refreshFeed()]);   // 그룹·피드 병렬
+  await refreshGroup();    // 멤버 색(memberColors) 먼저 채움
+  await refreshFeed();     // → 피드가 같은 색을 씀
   renderInviteCode(); renderAdminUI();
   return true;
 }
@@ -1002,7 +1006,8 @@ async function loadGroupData(){
   if(!state.groupId || !state.membershipId) return;
   var mr=await db.from('memberships')
     .select('id,weekly_goal,is_admin,leverage_left,profile_id,profiles(nickname)')
-    .eq('group_id', state.groupId);
+    .eq('group_id', state.groupId)
+    .order('joined_at', {ascending:true});   // 가입 순서 고정 → 색상 인덱스 안정
   var rows=mr.data||[];
   var ids=rows.map(function(r){ return r.id; });
   var recsBy={};
@@ -1026,12 +1031,16 @@ async function loadGroupData(){
       if(r.leveraged) w.leveraged=true;
     });
   }
+  memberColors = {};   // 가입 순서대로 고유색 재배정
   members=rows.map(function(r,i){
+    var nm=(r.profiles&&r.profiles.nickname)||'?';
+    var col=COLORS[i % COLORS.length];
+    memberColors[nm]=col;
     var recs=recsBy[r.id]||{};
     var d=deriveSeason(recs, r.weekly_goal, CURRENT_WEEK, TOTAL_WEEKS);
     var cur=recs[CURRENT_WEEK]||{};
-    return { membershipId:r.id, profileId:r.profile_id, name:(r.profiles&&r.profiles.nickname)||'?',
-      color:colorFor((r.profiles&&r.profiles.nickname)||'?'), goal:r.weekly_goal, fine:d.fine, done:cur.done_count||0,
+    return { membershipId:r.id, profileId:r.profile_id, name:nm,
+      color:col, goal:r.weekly_goal, fine:d.fine, done:cur.done_count||0,
       me:r.profile_id===state.myUid, is_admin:r.is_admin, leverageLeft:r.leverage_left,
       _statuses:d.statuses, _recs:recs };
   });
@@ -1049,6 +1058,9 @@ async function refreshGroup(){ await loadGroupData(); renderHome(); renderRank()
 function renderHome(){
   document.getElementById('hSeasonNo').textContent = SEASON_NO;
   document.getElementById('meSeasonNo').textContent = SEASON_NO;
+  var myCol=colorFor(state.nickname);   // 멤버 색과 일치 (memberColors 로드 후)
+  var ha=document.getElementById('hAvatar'); if(ha) ha.style.background=myCol;
+  var ma=document.getElementById('meAvatar'); if(ma) ma.style.background=myCol;
   document.getElementById('hWeekRange').textContent = CURRENT_WEEK+'주차';
   document.getElementById('hWeekDates').textContent = CURRENT_WEEK+'주차 · '+rangeLabel(CURRENT_WEEK);
   // 시즌바
