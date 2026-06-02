@@ -466,6 +466,9 @@
           <div class="mute2 small" style="margin-top:8px; line-height:1.5;" id="metaNote">촬영일이 이번 주차 안에 있어 유효한 인증이에요.</div>
         </div>
 
+        <label class="lbl" style="margin-top:18px;">한마디 (선택)</label>
+        <input class="field" id="certifyMemo" placeholder="ㅇㅇㅇ 야르~" maxlength="40"/>
+
         <div class="card" style="margin-top:18px;">
           <div class="row" style="margin-bottom:8px;">
             <span style="font-weight:700;">자동 공유 미리보기</span>
@@ -1148,7 +1151,7 @@ async function handleFile(e, source){
 async function submitCertify(){
   if(!state.membershipId){ toast('로그인이 필요해요'); return; }
   if(!selectedFile){ toast('운동 사진을 올려주세요'); return; }
-  var memo=null;
+  var memo=document.getElementById('certifyMemo').value.trim() || null;
   // 1) Storage 업로드
   var ext=(selectedFile.name.split('.').pop()||'jpg').toLowerCase();
   var path=state.groupId+'/'+state.membershipId+'/'+Date.now()+'.'+ext;
@@ -1171,6 +1174,7 @@ async function submitCertify(){
   document.getElementById('upTxt').style.display='';
   var fk=document.querySelector('#uploader .fakeimg'); if(fk) fk.remove();
   document.getElementById('metaCard').classList.add('hidden');
+  document.getElementById('certifyMemo').value='';
   document.getElementById('photoCam').value=''; document.getElementById('photoGal').value='';
   await refreshGroup(); await refreshFeed();
   setTimeout(function(){ go('home'); }, 700);
