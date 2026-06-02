@@ -783,7 +783,7 @@ function go(name){
   document.getElementById('tabbar').classList.toggle('hidden', name==='splash' || name==='onboard' || name==='login' || name==='seasonEnd' || name==='newSeason');
   if(name==='home' || name==='rank') refreshGroup();
   if(name==='feed') refreshFeed();
-  if(name==='certify'){ var sp=document.getElementById('sharePreviewCount'); if(sp) sp.textContent=state.done+'/'+state.goal; }
+  if(name==='certify'){ var sp=document.getElementById('sharePreviewCount'); if(sp) sp.textContent=(state.done+1)+'/'+state.goal; }
   if(name==='seasonEnd') renderSeasonEnd();
   if(name==='newSeason') renderSeasonPreview();
   if(name==='records') renderRecords();
@@ -1182,7 +1182,7 @@ async function submitCertify(){
 /* 인증 피드 링크를 카톡 등으로 공유 (Web Share API, 반자동) */
 async function shareCertification(certId){
   var url=location.href.split('?')[0].split('#')[0]+'?cert='+(certId||'');
-  var msg='🏋️ '+state.nickname+'님이 오운완 인증 업로드 완료!\n"인증 요청합니다 👀" ('+state.done+'/'+state.goal+')\n'+url;
+  var msg='🏋️ '+state.nickname+'님이 오운완 인증 업로드 완료!\n"인증 요청합니다 👀" ('+(state.done+1)+'/'+state.goal+')\n'+url;
   try{
     if(navigator.share){ await navigator.share({ text: msg }); return; }   // title/url 분리 제거 → 빈 줄 방지
   }catch(err){ if(err && err.name==='AbortError') return; }
