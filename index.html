@@ -1078,6 +1078,7 @@ async function loadGroupData(){
       _statuses:d.statuses, _recs:recs };
   });
   var me=members.filter(function(m){ return m.me; })[0];
+  state.meMember = me || null;   // 내 멤버십 캐시 (여러 렌더에서 재사용)
   if(me){
     state.goal=me.goal; state.done=me.done; state.leverageLeft=me.leverageLeft;
     weeks=me._statuses;
@@ -1149,7 +1150,7 @@ function renderHome(){
     document.getElementById('checkDots').innerHTML = dots;
   }
   // 누적 벌금 (상한 적용) + 현재 순위 (공동 처리)
-  var me=members.filter(function(m){ return m.me; })[0];
+  var me=state.meMember;
   var myFine = me?fineOf(me):0;
   document.getElementById('homeFine').textContent = myFine.toLocaleString()+'원';
   var rankEl=document.getElementById('homeRank');
@@ -1250,6 +1251,32 @@ async function handleFile(e, source){
     toast('갤러리 사진 첨부 · 촬영일 확인됨');
   }
 }
+/* 업로드 전 이미지 압축 (가장 긴 변 ≤1600px, JPEG 0.82). 확대해도 폰 화면에선 선명.
+   디코드 불가(HEIC 등)·실패 시 원본 그대로 반환. captureAt/photo_type은 업로드 전 이미 결정됨. */
+async function compressImage(file){
+  var MAX=1600, Q=0.82;
+  try{
+    if(!file.type || file.type.indexOf('image/')!==0) throw 0;
+    var bmp=await createImageBitmap(file);
+    var w=bmp.width, h=bmp.height, scale=Math.min(1, MAX/Math.max(w,h));   // 업스케일 안 함
+    var cw=Math.round(w*scale), ch=Math.round(h*scale);
+    var cv=document.createElement('canvas'); cv.width=cw; cv.height=ch;
+    cv.getContext('2d').drawImage(bmp, 0, 0, cw, ch);
+    if(bmp.close) bmp.close();
+    var blob=await new Promise(function(res){ cv.toBlob(res, 'image/jpeg', Q); });
+    if(!blob || blob.size>=file.size) throw 0;   // 더 작아질 때만 사용(이미 작은 사진은 원본)
+    return { blob:blob, type:'image/jpeg', ext:'jpg' };
+  }catch(_){
+    var ext=(file.name && file.name.split('.').pop() || 'jpg').toLowerCase();
+    return { blob:file, type:file.type||'image/jpeg', ext:ext };
+  }
+}
+/* photo_url → certs 버킷 상대경로 (g/m/ts.jpg). 삭제 API에 사용. */
+function pathFromUrl(url){
+  if(!url) return null;
+  var p=url.split('/certs/')[1];
+  return p ? decodeURIComponent(p.split('?')[0]) : null;
+}
 async function submitCertify(){
   if(!state.membershipId){ toast('로그인이 필요해요'); return; }
   if(CURRENT_WEEK<1){ toast('아직 시즌이 시작되지 않았어요. '+fmtStartLabel(SEASON_START)+'부터 인증할 수 있어요.'); return; }
@@ -1257,10 +1284,10 @@ async function submitCertify(){
   if(state.done >= tgt){ toast('이번 주 목표를 이미 다 채웠어요! 🎉'); go('certify'); return; }
   if(!selectedFile){ toast('운동 사진을 올려주세요'); return; }
   var memo=document.getElementById('certifyMemo').value.trim() || null;
-  // 1) Storage 업로드
-  var ext=(selectedFile.name.split('.').pop()||'jpg').toLowerCase();
-  var path=state.groupId+'/'+state.membershipId+'/'+Date.now()+'.'+ext;
-  var up=await db.storage.from('certs').upload(path, selectedFile, {contentType:selectedFile.type});
+  // 1) Storage 업로드 (압축 후)
+  var img=await compressImage(selectedFile);
+  var path=state.groupId+'/'+state.membershipId+'/'+Date.now()+'.'+img.ext;
+  var up=await db.storage.from('certs').upload(path, img.blob, {contentType:img.type});
   if(up.error){ toast('사진 업로드 실패: '+up.error.message+' (certs 버킷 확인)'); return; }
   var photoUrl=db.storage.from('certs').getPublicUrl(path).data.publicUrl;
   // 2) 인증 생성
@@ -1306,11 +1333,14 @@ function relTime(iso){
 }
 async function loadFeed(){
   if(!state.groupId){ feed=[]; return; }
-  var cf=await db.from('certifications')
-    .select('id,memo,photo_type,photo_url,capture_at,status,approvals,created_at, memberships!inner(group_id,profile_id,profiles(nickname))')
-    .eq('memberships.group_id', state.groupId)
-    .order('created_at',{ascending:false}).limit(50);
-  var mine=await db.from('certification_approvals').select('certification_id').eq('approver_id', state.myUid);
+  var both=await Promise.all([   // 인증 목록 + 내 승인 목록 병렬
+    db.from('certifications')
+      .select('id,memo,photo_type,photo_url,capture_at,status,approvals,created_at, memberships!inner(group_id,profile_id,profiles(nickname))')
+      .eq('memberships.group_id', state.groupId)
+      .order('created_at',{ascending:false}).limit(50),
+    db.from('certification_approvals').select('certification_id').eq('approver_id', state.myUid)
+  ]);
+  var cf=both[0], mine=both[1];
   var approvedSet={}; (mine.data||[]).forEach(function(a){ approvedSet[a.certification_id]=true; });
   feed=(cf.data||[]).map(function(c){
     var prof=c.memberships&&c.memberships.profiles;
@@ -1368,10 +1398,11 @@ function renderFeed(){
     var thumb = f.photoUrl
       ? '<div class="thumb" style="background-image:url('+f.photoUrl+');background-size:cover;background-position:center;" onclick="openPhoto(\''+f.id+'\')"><span class="zoom">🔍</span></div>'
       : '<div class="thumb">📷</div>';
+    var col=colorFor(f.name);
     return '<div class="card tight" style="position:relative;">'+
       (f.mine ? '<div class="cert-del" onclick="deleteCert(\''+f.id+'\')">✕</div>' : '')+
       '<div class="feed-item">'+
-        '<div class="avatar" style="background:'+colorFor(f.name)+'; color:'+textOn(colorFor(f.name))+'">'+f.name.charAt(0)+'</div>'+
+        '<div class="avatar" style="background:'+col+'; color:'+textOn(col)+'">'+f.name.charAt(0)+'</div>'+
         '<div style="flex:1; min-width:0;">'+
           '<div class="row"><b style="font-size:14px;">'+f.name+'</b><span class="mute2 small">'+relTime(f.created_at)+'</span></div>'+
           '<div class="muted small" style="margin-top:2px;">'+f.memo+'</div>'+
@@ -1385,8 +1416,11 @@ function renderFeed(){
 }
 async function deleteCert(certId){
   if(!confirm('이 인증을 삭제할까요?')) return;
-  var r=await db.from('certifications').delete().eq('id', certId);
+  var f=feed.filter(function(x){ return x.id===certId; })[0];
+  var r=await db.from('certifications').delete().eq('id', certId);   // row(권위 데이터) 먼저
   if(r.error){ toast('삭제 실패: '+r.error.message); return; }
+  var p=f && pathFromUrl(f.photoUrl);                               // Storage 파일 정리(best-effort)
+  if(p){ try{ await db.storage.from('certs').remove([p]); }catch(_){} }
   toast('인증을 삭제했어요');
   await refreshFeed(); await refreshGroup();
 }
@@ -1613,7 +1647,8 @@ async function loadExemptions(){
     return { membershipId:e.membership_id, name:m?m.name:'?', week:e.week_no };
   });
 }
-function renderExemptScreen(){
+/* 칩(멤버·주차)만 다시 그림 — 순수 UI 상태, DB 조회 없음 */
+function renderExemptChips(){
   document.getElementById('exMemberChips').innerHTML = members.map(function(m){
     return '<div class="chip '+(exMemberId===m.membershipId?'on':'')+'" onclick="pickExMember(\''+m.membershipId+'\')">'+m.name+'</div>';
   }).join('');
@@ -1621,22 +1656,26 @@ function renderExemptScreen(){
   // 면제는 미리 예정하는 용도 → 현재 주차 다음(+1)부터만 선택 가능 (복수 선택)
   for(var i=Math.max(CURRENT_WEEK+1,1);i<=TOTAL_WEEKS;i++){ wc+='<div class="chip '+(exWeeks.indexOf(i)>=0?'on':'')+'" onclick="pickExWeek('+i+')">'+i+'주차</div>'; }
   document.getElementById('exWeekChips').innerHTML = wc || '<span class="mute2 small">면제 가능한 다음 주차가 없어요</span>';
+}
+/* 화면 진입·데이터 변경 시 — 칩 + 면제 내역(DB) 모두 갱신 */
+function renderExemptScreen(){
+  renderExemptChips();
   loadExemptions().then(renderExemptList);
 }
-function pickExMember(id){ exMemberId=id; renderExemptScreen(); }
+function pickExMember(id){ exMemberId=id; renderExemptChips(); }
 function pickExWeek(w){
   var k=exWeeks.indexOf(w);
   if(k>=0) exWeeks.splice(k,1); else exWeeks.push(w);   // 토글
-  renderExemptScreen();
+  renderExemptChips();
 }
 async function applyExemption(){
   if(!exMemberId){ toast('멤버를 선택해주세요'); return; }
   if(!exWeeks.length){ toast('면제할 주차를 선택해주세요'); return; }
-  var wks=exWeeks.slice().sort(function(a,b){ return a-b; }), fail=0;
-  for(var i=0;i<wks.length;i++){
-    var r=await db.rpc('exempt_week',{p_membership_id:exMemberId, p_week_no:wks[i]});
-    if(r.error) fail++;
-  }
+  var wks=exWeeks.slice().sort(function(a,b){ return a-b; });
+  var results=await Promise.all(wks.map(function(w){   // 주차별 면제 병렬 처리
+    return db.rpc('exempt_week',{p_membership_id:exMemberId, p_week_no:w});
+  }));
+  var fail=results.filter(function(r){ return r.error; }).length;
   toast(fail ? (wks.length-fail)+'개 처리 · '+fail+'개 실패' : wks.length+'개 주차를 면제 처리했어요');
   exMemberId=null; exWeeks=[];
   await loadGroupData(); renderExemptScreen(); renderHome();
@@ -1691,11 +1730,23 @@ function renderSeasonPreview(){
   document.getElementById('nsEnd').textContent=fmtFull(end);
   document.getElementById('nsWeek1').textContent=fmtMD(start)+'~'+fmtMD(w1e);
 }
+/* 그룹의 모든 인증 사진 경로 수집 (RPC가 row를 지우기 전에 호출해야 함) */
+async function collectGroupPhotoPaths(){
+  var cf=await db.from('certifications')
+    .select('photo_url, memberships!inner(group_id)')
+    .eq('memberships.group_id', state.groupId);
+  return (cf.data||[]).map(function(c){ return pathFromUrl(c.photo_url); }).filter(Boolean);
+}
 async function createSeason(){
   var start=document.getElementById('nsDate').value;
   var wks=Math.min(Math.max(parseInt(document.getElementById('nsWeeks').value,10)||8,1),52);
+  var paths=await collectGroupPhotoPaths();   // RPC 전에 수집(이후엔 row 삭제됨)
   var r=await db.rpc('start_new_season',{ p_group_id:state.groupId, p_season_start:start, p_total_weeks:wks });
   if(r.error){ toast('새 시즌 시작 실패: '+r.error.message); return; }
+  // 지난 시즌 사진 파일 정리 (best-effort, 100개씩 청크)
+  for(var i=0;i<paths.length;i+=100){
+    try{ await db.storage.from('certs').remove(paths.slice(i,i+100)); }catch(_){}
+  }
   await loadSession();   // 갱신된 시즌번호·날짜·주차·초기화 반영
   go('home');
   toast('새 시즌 시작! 1주차 동안 마이 → 목표에서 주당 횟수를 다시 정할 수 있어요 💪');

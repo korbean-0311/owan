@@ -70,7 +70,7 @@ splash(로딩) · onboard(초대코드→계정→목표 / 새그룹설정) · l
 
 ## 10. DB 변경 시 (마이그레이션)
 - 전체 초기화: `supabase/schema.sql` 재실행(drop&recreate — **데이터 전부 삭제**). 후 Auth→Users 정리.
-- 데이터 보존 변경: 별도 마이그레이션 SQL 작성(ALTER/CREATE OR REPLACE/UPDATE). 예: `supabase/migration_colors.sql`, `migration_colors2.sql`.
+- 데이터 보존 변경: 별도 마이그레이션 SQL 작성(ALTER/CREATE OR REPLACE/UPDATE). 예: `supabase/migration_colors.sql`, `migration_colors2.sql`, `migration_storage_delete.sql`(certs 버킷 DELETE 정책 — 본인/방장만, 사진 파일 정리용).
 - publishable 키로는 DDL 불가 → **사용자가 SQL Editor에서 직접 실행**해야 함. 스키마 변경 시 프론트가 새 컬럼을 select하면 컬럼 생성 전엔 에러 → **마이그레이션 먼저, 배포 나중**.
 
 ## 11. 주요 한계/주의 (gotcha)
@@ -78,6 +78,7 @@ splash(로딩) · onboard(초대코드→계정→목표 / 새그룹설정) · l
 - iOS는 "사진 선택" 시 액션시트(보관함/찍기/파일)가 기본 — 웹에선 보관함 바로 열기 강제 불가.
 - **카톡 공유**: Web Share API(`navigator.share`, text만) — API키 불필요. 링크(`?cert=`/`?join=`) 공유 → 받은 사람은 카톡 인앱 브라우저에서 1회 로그인 필요(인앱 브라우저 샌드박스). 데스크톱은 링크 복사 폴백.
 - 현재 다중기기 실시간 동기화 없음(새로고침/화면진입 시 refresh). 주차 마감/벌금은 derive라 cron 불필요.
+- **사진 저장 용량(무료 유지)**: 업로드 시 클라이언트 압축(`compressImage`, 가장 긴 변 1600px·JPEG 0.82 — 확대해도 선명). 개별 삭제(`deleteCert`)·시즌 종료(`createSeason`→start_new_season은 row만 삭제)에서 **Storage 파일도 `remove()`** 로 정리. ⚠️ 파일 삭제는 `migration_storage_delete.sql`(certs DELETE 정책) 선행 필요. 누적된 고아 파일은 다음 시즌 시작 시 자동 정리됨.
 
 ## 12. 진행 상태 / 다음 후보
 - ✅ 완료: 전 기능 구현 + Supabase 연동 + PWA + GitHub Pages 배포 + 베타 피드백 다수 반영. 9명 베타테스트 중.
