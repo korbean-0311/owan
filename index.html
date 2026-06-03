@@ -1294,6 +1294,14 @@ async function submitCertify(){
   var tgt = state.leverageActive ? state.goal*2 : state.goal;
   if(state.done >= tgt){ toast('이번 주 목표를 이미 다 채웠어요! 🎉'); go('certify'); return; }
   if(!selectedFile){ toast('운동 사진을 올려주세요'); return; }
+  // 같은 사진 중복 업로드 방지 — 같은 촬영시각(메타데이터)이면 같은 사진으로 간주
+  if(captureAt){
+    var dup=await db.from('certifications').select('id')
+      .eq('membership_id', state.membershipId)
+      .eq('capture_at', captureAt.toISOString())
+      .limit(1).maybeSingle();
+    if(dup && dup.data){ toast('이미 같은 사진으로 인증했어요. 다른 운동 사진을 올려주세요.'); return; }
+  }
   var memo=document.getElementById('certifyMemo').value.trim() || null;
   // 1) Storage 업로드 (압축 후)
   var img=await compressImage(selectedFile);
@@ -1411,7 +1419,7 @@ function renderFeed(){
       : '<div class="thumb">📷</div>';
     var col=colorFor(f.name);
     return '<div class="card tight" style="position:relative;">'+
-      (f.mine ? '<div class="cert-del" onclick="deleteCert(\''+f.id+'\')">✕</div>' : '')+
+      (f.mine && f.status!=='approved' ? '<div class="cert-del" onclick="deleteCert(\''+f.id+'\')">✕</div>' : '')+   // 승인 완료는 삭제 불가(벌금 소급 방지)
       '<div class="feed-item">'+
         '<div class="avatar" style="background:'+col+'; color:'+textOn(col)+'">'+f.name.charAt(0)+'</div>'+
         '<div style="flex:1; min-width:0;">'+
@@ -1426,8 +1434,9 @@ function renderFeed(){
   }).join('');
 }
 async function deleteCert(certId){
-  if(!confirm('이 인증을 삭제할까요?')) return;
   var f=feed.filter(function(x){ return x.id===certId; })[0];
+  if(f && f.status==='approved'){ toast('승인 완료된 인증은 삭제할 수 없어요.'); return; }   // 벌금 소급 변동 방지
+  if(!confirm('이 인증을 삭제할까요?')) return;
   var r=await db.from('certifications').delete().eq('id', certId);   // row(권위 데이터) 먼저
   if(r.error){ toast('삭제 실패: '+r.error.message); return; }
   var p=f && pathFromUrl(f.photoUrl);                               // Storage 파일 정리(best-effort)
