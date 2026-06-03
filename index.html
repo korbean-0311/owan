@@ -226,6 +226,16 @@
   .day .cell.future{opacity:.35;}
   .wk-result{display:flex; align-items:center; justify-content:space-between; padding:13px 4px; border-bottom:1px solid var(--line);}
   .wk-result:last-child{border-bottom:none;}
+  /* 면제 내역 — 사람별 병합 카드 */
+  .ex-member-card{padding:13px 4px; border-bottom:1px solid var(--line);}
+  .ex-member-card:last-child{border-bottom:none;}
+  .ex-week-wrap{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px;}
+  .ex-week-chip{display:inline-flex; align-items:center; gap:5px; padding:5px 5px 5px 11px;
+    border-radius:999px; background:rgba(154,164,178,.16); color:var(--text-dim); font-size:12px; font-weight:600;}
+  .ex-week-x{border:none; padding:0; width:18px; height:18px; border-radius:50%; cursor:pointer;
+    background:rgba(255,255,255,.08); color:var(--text-dim); font-size:10px; line-height:1;
+    display:inline-flex; align-items:center; justify-content:center;}
+  .ex-week-x:hover{background:var(--danger); color:#fff;}
 
   /* ── 멤버 관리 ─────────────── */
   .stepper{display:flex; align-items:center; gap:10px;}
@@ -436,7 +446,7 @@
 
         <div class="card" id="leverageCard"></div>
 
-        <button class="btn" onclick="go('certify')">📸 오운완 인증하기</button>
+        <button class="btn" id="homeCertifyBtn" onclick="go('certify')">📸 오운완 인증하기</button>
       </div>
     </section>
 
@@ -749,8 +759,16 @@ var TOTAL_WEEKS = 8;                         // 시즌 진행 주차 수 (방장
 var CURRENT_WEEK = 3;                        // 오늘이 속한 주차
 function computeCurrentWeek(){
   var wk = Math.floor((TODAY - SEASON_START)/(7*86400000))+1;
-  return Math.min(Math.max(wk,1), TOTAL_WEEKS);
+  return Math.min(Math.max(wk,0), TOTAL_WEEKS);   // 시작 전이면 0(대기), 종료 후 상한 TOTAL_WEEKS
 }
+/* 날짜 d까지 남은 일수(자정 기준) */
+function daysUntil(d){
+  var a=new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate());
+  var b=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  return Math.round((b-a)/86400000);
+}
+/* "6월 8일(월)" 형식 */
+function fmtStartLabel(d){ return (d.getMonth()+1)+'월 '+d.getDate()+'일('+DOW_KO[d.getDay()]+')'; }
 function fmtFull(d){ return d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0'); }
 function weekRange(wk){
   var s = new Date(SEASON_START); s.setDate(s.getDate()+(wk-1)*7);
@@ -800,6 +818,10 @@ var weeks = [];
 
 /* ──────── 화면 전환 ──────── */
 function go(name){
+  if(name==='certify' && CURRENT_WEEK<1){   // 시즌 시작 전엔 인증 불가 → 홈으로 우회
+    toast('아직 시즌이 시작되지 않았어요. '+fmtStartLabel(SEASON_START)+'부터 인증할 수 있어요.');
+    name='home';
+  }
   document.querySelectorAll('.screen').forEach(function(s){ s.classList.toggle('active', s.dataset.screen===name); });
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('on', t.dataset.tab===name); });
   document.getElementById('tabbar').classList.toggle('hidden', name==='splash' || name==='onboard' || name==='login' || name==='seasonEnd' || name==='newSeason');
@@ -1005,8 +1027,8 @@ function deriveSeason(recs, goal, curWeek, total){
   var arr=[];
   for(var k=1;k<=total;k++){
     if(status[k]) arr.push(status[k]);
+    else if((recs[k]||{}).status==='exempt') arr.push('exempt');   // 면제가 '진행 중'보다 우선
     else if(k===curWeek) arr.push('cur');
-    else if((recs[k]||{}).status==='exempt') arr.push('exempt');
     else arr.push('');
   }
   return { fine:fine, statuses:arr };
@@ -1061,6 +1083,7 @@ async function loadGroupData(){
     weeks=me._statuses;
     var c=me._recs[CURRENT_WEEK]||{}, p=me._recs[CURRENT_WEEK-1]||{};
     state.leverageActive = !!(c.leveraged || p.leveraged);
+    state.exemptThisWeek = (c.status==='exempt');   // 이번 주 면제됨
   }
 }
 async function refreshGroup(){ await loadGroupData(); renderHome(); renderRank(); renderCap(); }
@@ -1073,29 +1096,58 @@ function renderHome(){
   var myTxt=textOn(myCol);
   var ha=document.getElementById('hAvatar'); if(ha){ ha.style.background=myCol; ha.style.color=myTxt; }
   var ma=document.getElementById('meAvatar'); if(ma){ ma.style.background=myCol; ma.style.color=myTxt; }
-  document.getElementById('hWeekRange').textContent = CURRENT_WEEK+'주차';
-  document.getElementById('hWeekDates').textContent = CURRENT_WEEK+'주차 · '+rangeLabel(CURRENT_WEEK);
+  var preSeason = CURRENT_WEEK<1;   // 시즌 시작 전(대기)
+  document.getElementById('hWeekRange').textContent = preSeason ? '시작 대기' : CURRENT_WEEK+'주차';
+  document.getElementById('hWeekDates').textContent = preSeason
+    ? fmtStartLabel(SEASON_START)+' 시작 예정'
+    : CURRENT_WEEK+'주차 · '+rangeLabel(CURRENT_WEEK);
   // 시즌바
   document.getElementById('seasonBar').innerHTML = weeks.map(function(w){ return '<div class="wk '+w+'"></div>'; }).join('');
+  // 홈 인증 버튼 — 대기 중엔 잠금
+  var hcb=document.getElementById('homeCertifyBtn');
+  if(hcb) hcb.textContent = preSeason ? '🔒 시즌 시작 후 인증 가능' : '📸 오운완 인증하기';
   // 링
-  var lev = state.leverageActive;
-  var target = lev ? state.goal*2 : state.goal;
-  var remain = Math.max(target-state.done, 0);
-  var ratio = Math.min(state.done/target, 1);
-  document.getElementById('ringFg').setAttribute('stroke-dashoffset', 289*(1-ratio));
-  document.getElementById('ringFg').setAttribute('stroke', lev ? 'var(--blue)' : 'var(--accent)');
-  document.getElementById('ringCnt').textContent = state.done+'/'+target;
+  var ringFg = document.getElementById('ringFg');
   var ringLabel = document.getElementById('ringLabel');
-  ringLabel.textContent = lev ? '⚡ 레버리지 사용중!' : '이번 주 인증';
-  ringLabel.style.color = lev ? 'var(--blue)' : '';
-  ringLabel.style.fontWeight = lev ? '700' : '';
-  document.getElementById('ringRemain').innerHTML = lev
-    ? '이번주 + 다음주 목표까지 <b style="color:var(--blue)">'+remain+'회</b> 남음'
-    : '목표까지 <b style="color:var(--accent)">'+remain+'회</b> 남음';
-  // 체크 점
-  var dots='';
-  for(var i=0;i<target;i++){ dots += '<div class="dot '+(i<state.done?'on':'')+'">'+(i<state.done?'✓':(i+1))+'</div>'; }
-  document.getElementById('checkDots').innerHTML = dots;
+  if(preSeason){
+    // 시즌 시작 대기 — D-day 카운트다운
+    ringFg.setAttribute('stroke-dashoffset', 0);
+    ringFg.setAttribute('stroke', '#49515f');
+    document.getElementById('ringCnt').textContent = 'D-'+daysUntil(SEASON_START);
+    ringLabel.textContent = '시즌 시작 대기';
+    ringLabel.style.color = 'var(--text-dim)';
+    ringLabel.style.fontWeight = '700';
+    document.getElementById('ringRemain').innerHTML = '<b style="color:var(--text)">'+fmtStartLabel(SEASON_START)+'</b>에 시즌이 시작돼요';
+    document.getElementById('checkDots').innerHTML = '<span class="verify-tag gray" style="margin-top:12px;">⏳ 시작 전</span>';
+  } else if(state.exemptThisWeek){
+    // 이번 주는 면제 — 목표/진행 대신 면제 상태로 표시
+    ringFg.setAttribute('stroke-dashoffset', 0);
+    ringFg.setAttribute('stroke', '#49515f');
+    document.getElementById('ringCnt').textContent = '면제';
+    ringLabel.textContent = '이번 주 면제';
+    ringLabel.style.color = 'var(--text-dim)';
+    ringLabel.style.fontWeight = '700';
+    document.getElementById('ringRemain').innerHTML = '사정상 면제된 주차예요. <b style="color:var(--text-dim)">벌금·누진에서 제외</b>돼요.';
+    document.getElementById('checkDots').innerHTML = '<span class="verify-tag gray" style="margin-top:12px;">– 이번 주 인증 면제</span>';
+  } else {
+    var lev = state.leverageActive;
+    var target = lev ? state.goal*2 : state.goal;
+    var remain = Math.max(target-state.done, 0);
+    var ratio = Math.min(state.done/target, 1);
+    ringFg.setAttribute('stroke-dashoffset', 289*(1-ratio));
+    ringFg.setAttribute('stroke', lev ? 'var(--blue)' : 'var(--accent)');
+    document.getElementById('ringCnt').textContent = state.done+'/'+target;
+    ringLabel.textContent = lev ? '⚡ 레버리지 사용중!' : '이번 주 인증';
+    ringLabel.style.color = lev ? 'var(--blue)' : '';
+    ringLabel.style.fontWeight = lev ? '700' : '';
+    document.getElementById('ringRemain').innerHTML = lev
+      ? '이번주 + 다음주 목표까지 <b style="color:var(--blue)">'+remain+'회</b> 남음'
+      : '목표까지 <b style="color:var(--accent)">'+remain+'회</b> 남음';
+    // 체크 점
+    var dots='';
+    for(var i=0;i<target;i++){ dots += '<div class="dot '+(i<state.done?'on':'')+'">'+(i<state.done?'✓':(i+1))+'</div>'; }
+    document.getElementById('checkDots').innerHTML = dots;
+  }
   // 누적 벌금 (상한 적용) + 현재 순위 (공동 처리)
   var me=members.filter(function(m){ return m.me; })[0];
   var myFine = me?fineOf(me):0;
@@ -1113,7 +1165,14 @@ function renderHome(){
 
 /* 직전 주차들로부터 연속 성공/실패 streak 계산 → 배너 */
 function renderStreakBanner(){
-  var cur = weeks.indexOf('cur'); if(cur<0) cur = weeks.length;
+  if(CURRENT_WEEK<1){   // 시즌 시작 대기
+    document.getElementById('streakBanner').innerHTML =
+      '<div class="banner neutral"><span class="ic">🕓</span><div class="t">'+
+      '<b>곧 시즌이 시작돼요.</b><br/>'+
+      '<span class="muted">'+fmtStartLabel(SEASON_START)+'부터 인증을 올릴 수 있어요. 그때 만나요!</span></div></div>';
+    return;
+  }
+  var cur = CURRENT_WEEK-1;   // 현재 주차 인덱스(면제로 'cur'가 weeks에 없을 수 있어 직접 사용)
   var fineBase = state.goal===3?3000 : state.goal===4?2000 : 1000;
   var streak=0, mode=null;
   for(var i=cur-1; i>=0; i--){
@@ -1193,6 +1252,7 @@ async function handleFile(e, source){
 }
 async function submitCertify(){
   if(!state.membershipId){ toast('로그인이 필요해요'); return; }
+  if(CURRENT_WEEK<1){ toast('아직 시즌이 시작되지 않았어요. '+fmtStartLabel(SEASON_START)+'부터 인증할 수 있어요.'); return; }
   var tgt = state.leverageActive ? state.goal*2 : state.goal;
   if(state.done >= tgt){ toast('이번 주 목표를 이미 다 채웠어요! 🎉'); go('certify'); return; }
   if(!selectedFile){ toast('운동 사진을 올려주세요'); return; }
@@ -1281,6 +1341,10 @@ function toggleFeedFilter(){
 }
 function renderFeed(){
   var el=document.getElementById('feedList');
+  if(CURRENT_WEEK<1){   // 시즌 시작 전 — 인증 피드 비활성
+    el.innerHTML='<div class="card tight"><span class="mute2 small">아직 시즌이 시작되지 않았어요. '+fmtStartLabel(SEASON_START)+'부터 인증이 올라와요.</span></div>';
+    return;
+  }
   var list=feed.filter(function(f){ return feedFilter==='approved' ? f.status==='approved' : f.status!=='approved'; });
   if(!list.length){ el.innerHTML='<div class="card tight"><span class="mute2 small">'+
     (feedFilter==='approved' ? '아직 승인 완료된 인증이 없어요.' : '대기 중인 인증이 없어요. 첫 오운완을 올려보세요!')+'</span></div>'; return; }
@@ -1357,6 +1421,10 @@ var FINE_CAP = 100000;                  // 1인 누적 벌금 상한
 var APPROVE_NEEDED = 2;                  // 인증 완료에 필요한 승인 수
 function fineOf(m){ return Math.min(m.fine, FINE_CAP); }
 function sumFines(){ return members.reduce(function(s,m){ return s+fineOf(m); }, 0); }
+/* 멤버 행 부제 — 시즌 시작 전엔 '이번 주 X/Y' 대신 '시작 대기' */
+function memberSubLine(m){
+  return CURRENT_WEEK<1 ? '주 '+m.goal+'회 · 시작 대기' : '주 '+m.goal+'회 · 이번 주 '+m.done+'/'+m.goal;
+}
 function rankRows(){
   var sorted = members.slice().sort(function(a,b){ return fineOf(a)-fineOf(b); });
   return sorted.map(function(m){
@@ -1372,7 +1440,7 @@ function rankRows(){
       '<div class="avatar" style="background:'+m.color+'; color:'+textOn(m.color)+'; width:38px; height:38px; flex:0 0 38px;">'+m.name.charAt(0)+'</div>'+
       '<div style="flex:1;">'+
         '<div><b style="font-size:14px;">'+m.name+'</b>'+(m.me?' <span class="pill accent" style="padding:2px 7px;">나</span>':'')+tieTag+'</div>'+
-        '<div class="mute2 small">주 '+m.goal+'회 · 이번 주 '+m.done+'/'+m.goal+'</div>'+
+        '<div class="mute2 small">'+memberSubLine(m)+'</div>'+
       '</div>'+
       '<div class="rank-amt" style="color:'+(shown===0?'var(--accent)':'var(--text)')+'">'+shown.toLocaleString()+'원'+capTag+'</div>'+
     '</div>';
@@ -1445,7 +1513,7 @@ function renderMembers(){
     return '<div class="rank-row">'+
       '<div class="avatar" style="background:'+m.color+'; color:'+textOn(m.color)+'; width:38px; height:38px; flex:0 0 38px;">'+m.name.charAt(0)+'</div>'+
       '<div style="flex:1;"><b style="font-size:14px;">'+m.name+'</b>'+
-        '<div class="mute2 small">주 '+m.goal+'회 · 이번 주 '+m.done+'/'+m.goal+'</div></div>'+
+        '<div class="mute2 small">'+memberSubLine(m)+'</div></div>'+
       btn+'</div>';
   }).join('');
   renderCap();
@@ -1461,9 +1529,11 @@ async function kickMember(i){
 /* ──────── 주차별 기록 (달력, DB) ──────── */
 var DOW_KO = ['일','월','화','수','목','금','토'];
 async function renderRecords(){
-  var r=weekRange(CURRENT_WEEK);
-  document.getElementById('recWeekTitle').textContent = '이번 주 · '+CURRENT_WEEK+'주차';
-  document.getElementById('recWeekRange').textContent = rangeLabel(CURRENT_WEEK);
+  var preSeason = CURRENT_WEEK<1;
+  var calWeek = preSeason ? 1 : CURRENT_WEEK;   // 대기 중엔 1주차 달력 미리보기
+  var r=weekRange(calWeek);
+  document.getElementById('recWeekTitle').textContent = preSeason ? '시즌 시작 전 · 1주차(예정)' : '이번 주 · '+CURRENT_WEEK+'주차';
+  document.getElementById('recWeekRange').textContent = rangeLabel(calWeek);
   var doneDays={};
   if(state.membershipId){
     var cf=await db.from('certifications').select('created_at,capture_at')
@@ -1480,7 +1550,11 @@ async function renderRecords(){
     html+='<div class="day"><div class="dow">'+DOW_KO[d.getDay()]+'</div><div class="'+cls+'">'+d.getDate()+'</div></div>';
   }
   document.getElementById('calWeek').innerHTML=html;
-  document.getElementById('recSummary').textContent='이번 주 '+state.done+'/'+state.goal+'회 운동했어요.';
+  document.getElementById('recSummary').textContent = preSeason
+    ? '아직 시즌이 시작되지 않았어요. '+fmtStartLabel(SEASON_START)+'부터 시작돼요.'
+    : state.exemptThisWeek
+      ? '이번 주는 면제됐어요. 벌금·누진에서 제외돼요.'
+      : '이번 주 '+state.done+'/'+state.goal+'회 운동했어요.';
   // 주차별 결과
   var wr='';
   for(var k=0;k<weeks.length;k++){
@@ -1498,6 +1572,10 @@ async function renderRecords(){
 function renderLeverage(){
   var el=document.getElementById('leverageCard');
   var target=state.goal*2;
+  if(CURRENT_WEEK<1){   // 시즌 시작 대기
+    el.innerHTML='<div class="row"><b class="muted">⚡ 레버리지</b><span class="mute2 small">시즌 시작 후 사용 가능</span></div>';
+    return;
+  }
   if(state.leverageActive){
     el.innerHTML='<div class="row" style="margin-bottom:6px;"><b>⚡ 레버리지 사용중</b><span class="mute2 small">'+state.leverageLeft+'/2회 남음</span></div>'+
       '<div class="muted small" style="line-height:1.55;">이번 주 판정을 다음 주와 합쳐 진행 중이에요. 위 진행률을 채우면 두 주 모두 인정돼요. 실패하면 두 주가 연속 미달로 처리돼 누진 벌금이 적용돼요.</div>';
@@ -1512,6 +1590,7 @@ function renderLeverage(){
     '<button class="btn ghost sm" style="width:100%;'+(state.leverageLeft<=0?' opacity:.4;':'')+'" onclick="useLeverage()">레버리지 사용하기</button>';
 }
 async function useLeverage(){
+  if(CURRENT_WEEK<1){ toast('아직 시즌이 시작되지 않았어요'); return; }
   if(CURRENT_WEEK>=TOTAL_WEEKS){ toast('마지막 주차에는 레버리지를 쓸 수 없어요'); return; }
   if(state.leverageLeft<=0){ toast('이번 시즌 레버리지를 모두 사용했어요'); return; }
   if(state.leverageActive){ toast('이미 레버리지 사용 중이에요'); return; }
@@ -1523,7 +1602,7 @@ async function useLeverage(){
 
 /* ──────── 개인 사정 면제 (방장, DB) ──────── */
 var exemptions=[];
-var exMemberId=null, exWeek=null;
+var exMemberId=null, exWeeks=[];   // 면제할 주차 복수 선택
 async function loadExemptions(){
   exemptions=[];
   var ids=members.map(function(m){ return m.membershipId; });
@@ -1539,27 +1618,53 @@ function renderExemptScreen(){
     return '<div class="chip '+(exMemberId===m.membershipId?'on':'')+'" onclick="pickExMember(\''+m.membershipId+'\')">'+m.name+'</div>';
   }).join('');
   var wc='';
-  for(var i=1;i<=CURRENT_WEEK;i++){ wc+='<div class="chip '+(exWeek===i?'on':'')+'" onclick="pickExWeek('+i+')">'+i+'주차</div>'; }
-  document.getElementById('exWeekChips').innerHTML=wc;
+  // 면제는 미리 예정하는 용도 → 현재 주차 다음(+1)부터만 선택 가능 (복수 선택)
+  for(var i=Math.max(CURRENT_WEEK+1,1);i<=TOTAL_WEEKS;i++){ wc+='<div class="chip '+(exWeeks.indexOf(i)>=0?'on':'')+'" onclick="pickExWeek('+i+')">'+i+'주차</div>'; }
+  document.getElementById('exWeekChips').innerHTML = wc || '<span class="mute2 small">면제 가능한 다음 주차가 없어요</span>';
   loadExemptions().then(renderExemptList);
 }
 function pickExMember(id){ exMemberId=id; renderExemptScreen(); }
-function pickExWeek(w){ exWeek=w; renderExemptScreen(); }
+function pickExWeek(w){
+  var k=exWeeks.indexOf(w);
+  if(k>=0) exWeeks.splice(k,1); else exWeeks.push(w);   // 토글
+  renderExemptScreen();
+}
 async function applyExemption(){
   if(!exMemberId){ toast('멤버를 선택해주세요'); return; }
-  if(!exWeek){ toast('면제할 주차를 선택해주세요'); return; }
-  var r=await db.rpc('exempt_week',{p_membership_id:exMemberId, p_week_no:exWeek});
-  if(r.error){ toast('면제 실패: '+r.error.message); return; }
-  toast('면제 처리했어요');
-  exMemberId=null; exWeek=null;
+  if(!exWeeks.length){ toast('면제할 주차를 선택해주세요'); return; }
+  var wks=exWeeks.slice().sort(function(a,b){ return a-b; }), fail=0;
+  for(var i=0;i<wks.length;i++){
+    var r=await db.rpc('exempt_week',{p_membership_id:exMemberId, p_week_no:wks[i]});
+    if(r.error) fail++;
+  }
+  toast(fail ? (wks.length-fail)+'개 처리 · '+fail+'개 실패' : wks.length+'개 주차를 면제 처리했어요');
+  exMemberId=null; exWeeks=[];
   await loadGroupData(); renderExemptScreen(); renderHome();
 }
 function renderExemptList(){
   var el=document.getElementById('exemptList');
   if(!exemptions.length){ el.innerHTML='<div class="wk-result"><span class="mute2 small">아직 면제 내역이 없어요</span></div>'; return; }
-  el.innerHTML=exemptions.map(function(e){
-    return '<div class="wk-result"><div><b style="font-size:14px;">'+e.name+'</b> <span class="mute2 small">'+e.week+'주차 ('+rangeLabel(e.week)+')</span></div>'+
-      '<button class="btn outline sm" onclick="removeExemption(\''+e.membershipId+'\','+e.week+')">해제</button></div>';
+  // 사람별로 병합 (영석 → 2,5주차를 한 카드에)
+  var byMember={}, order=[];
+  exemptions.forEach(function(e){
+    if(!byMember[e.membershipId]){ byMember[e.membershipId]={name:e.name, weeks:[]}; order.push(e.membershipId); }
+    byMember[e.membershipId].weeks.push(e.week);
+  });
+  el.innerHTML=order.map(function(mid){
+    var g=byMember[mid]; g.weeks.sort(function(a,b){ return a-b; });
+    var col=colorFor(g.name);
+    var chips=g.weeks.map(function(w){
+      return '<span class="ex-week-chip">'+w+'주차'+
+        '<button class="ex-week-x" title="'+w+'주차 면제 해제" onclick="removeExemption(\''+mid+'\','+w+')">✕</button></span>';
+    }).join('');
+    return '<div class="ex-member-card">'+
+      '<div class="row" style="justify-content:flex-start; gap:9px;">'+
+        '<div class="avatar" style="background:'+col+'; color:'+textOn(col)+'; width:30px; height:30px; flex:0 0 30px; font-size:13px;">'+g.name.charAt(0)+'</div>'+
+        '<b style="font-size:14px;">'+g.name+'</b>'+
+        '<span class="mute2 small" style="margin-left:auto;">'+g.weeks.length+'개 주차 면제</span>'+
+      '</div>'+
+      '<div class="ex-week-wrap">'+chips+'</div>'+
+    '</div>';
   }).join('');
 }
 async function removeExemption(mid, w){
