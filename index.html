@@ -583,11 +583,11 @@
     <!-- ════════ 시즌 종료 ════════ -->
     <section class="screen" data-screen="seasonEnd">
       <div class="scroll" style="padding-top:14px;">
-        <div class="row"><span class="btn outline sm" onclick="go('me')">‹ 뒤로</span><span></span></div>
+        <div class="row"><span class="btn outline sm" id="endBackBtn" onclick="go('me')">‹ 뒤로</span><span></span></div>
         <div class="end-hero">
           <div class="flag">🏁</div>
-          <h1>시즌 1 종료!</h1>
-          <p class="muted" style="margin:0; font-size:14px;">8주간 정말 수고했어요 💪</p>
+          <h1>시즌 <span id="endSeasonNo">1</span> 종료!</h1>
+          <p class="muted" style="margin:0; font-size:14px;"><span id="endWeeks">8</span>주간 정말 수고했어요 💪</p>
         </div>
 
         <div class="card center-col" style="padding:20px;">
@@ -762,6 +762,10 @@ function computeCurrentWeek(){
   var wk = Math.floor((TODAY - SEASON_START)/(7*86400000))+1;
   return Math.min(Math.max(wk,0), TOTAL_WEEKS);   // 시작 전이면 0(대기), 종료 후 상한 TOTAL_WEEKS
 }
+/* 시즌 종료 다음날 0시(exclusive) — 마지막 주 말일 다음날 */
+function seasonEndExclusive(){ var d=new Date(SEASON_START); d.setDate(d.getDate()+TOTAL_WEEKS*7); return d; }
+/* 시즌 캘린더가 완전히 끝났는지 (마지막 주 말일이 지났는지) */
+function isSeasonOver(){ return CURRENT_WEEK>=1 && TODAY >= seasonEndExclusive(); }
 /* 날짜 d까지 남은 일수(자정 기준) */
 function daysUntil(d){
   var a=new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate());
@@ -819,6 +823,10 @@ var weeks = [];
 
 /* ──────── 화면 전환 ──────── */
 function go(name){
+  // 시즌 종료일이 지나면 정산(순위표) 화면에 고정 — 방장이 새 시즌을 시작할 때까지 다른 화면 진입 차단
+  if(isSeasonOver() && name!=='seasonEnd' && name!=='newSeason' && name!=='login' && name!=='onboard' && name!=='splash'){
+    name='seasonEnd';
+  }
   if(name==='certify' && CURRENT_WEEK<1){   // 시즌 시작 전엔 인증 불가 → 홈으로 우회
     toast('아직 시즌이 시작되지 않았어요. '+fmtStartLabel(SEASON_START)+'부터 인증할 수 있어요.');
     name='home';
@@ -1071,7 +1079,9 @@ async function loadGroupData(){
     var col=r.color || COLORS[(i*7) % COLORS.length];   // DB 저장색(가입시 고정), 없으면 폴백
     memberColors[nm]=col;
     var recs=recsBy[r.id]||{};
-    var d=deriveSeason(recs, r.weekly_goal, CURRENT_WEEK, TOTAL_WEEKS);
+    // 시즌 종료 시엔 마지막 주차까지 모두 정산(curWeek=TOTAL+1) → 최종 순위에 마지막 주 반영
+    var effWeek = isSeasonOver() ? TOTAL_WEEKS+1 : CURRENT_WEEK;
+    var d=deriveSeason(recs, r.weekly_goal, effWeek, TOTAL_WEEKS);
     var cur=recs[CURRENT_WEEK]||{};
     return { membershipId:r.id, profileId:r.profile_id, name:nm,
       color:col, goal:r.weekly_goal, fine:d.fine, done:cur.done_count||0,
@@ -1336,7 +1346,7 @@ async function loadFeed(){
   if(!state.groupId){ feed=[]; return; }
   var both=await Promise.all([   // 인증 목록 + 내 승인 목록 병렬
     db.from('certifications')
-      .select('id,memo,photo_type,photo_url,capture_at,status,approvals,created_at, memberships!inner(group_id,profile_id,profiles(nickname))')
+      .select('id,week_no,memo,photo_type,photo_url,capture_at,status,approvals,created_at, memberships!inner(group_id,profile_id,profiles(nickname))')
       .eq('memberships.group_id', state.groupId)
       .order('created_at',{ascending:false}).limit(50),
     db.from('certification_approvals').select('certification_id').eq('approver_id', state.myUid)
@@ -1345,7 +1355,7 @@ async function loadFeed(){
   var approvedSet={}; (mine.data||[]).forEach(function(a){ approvedSet[a.certification_id]=true; });
   feed=(cf.data||[]).map(function(c){
     var prof=c.memberships&&c.memberships.profiles;
-    return { id:c.id, name:prof?prof.nickname:'?', memo:c.memo||'오운완 완료!',
+    return { id:c.id, week_no:c.week_no, name:prof?prof.nickname:'?', memo:c.memo||'오운완 완료!',
       photoType:c.photo_type, photoUrl:c.photo_url, captureAt:c.capture_at,
       approvals:c.approvals, status:c.status,
       mine:c.memberships&&c.memberships.profile_id===state.myUid,
@@ -1353,11 +1363,11 @@ async function loadFeed(){
   });
 }
 async function refreshFeed(){ await loadFeed(); renderFeed(); }
-function certVerdict(pt, capIso){
+function certVerdict(pt, capIso, weekNo){
   if(pt==='camera') return {cls:'ok', tag:'✓ 직접 촬영', date: capIso?fmtDateTime(new Date(capIso)):'방금 촬영'};
   if(pt==='capture') return {cls:'bad', tag:'📷 메타데이터 없음', date:'— (메타데이터 없음)'};
   var d=capIso ? new Date(capIso) : null;
-  var ok=d && inWeek(d, CURRENT_WEEK);
+  var ok=d && inWeek(d, weekNo);   // 인증의 실제 주차로 검증 (현재 주차가 아님)
   return ok ? {cls:'ok', tag:'✓ 메타데이터 인증', date:fmtDateTime(d)}
             : {cls:'bad', tag:'⚠ 범위 밖', date:d?fmtDateTime(d):'—'};
 }
@@ -1380,7 +1390,7 @@ function renderFeed(){
   if(!list.length){ el.innerHTML='<div class="card tight"><span class="mute2 small">'+
     (feedFilter==='approved' ? '아직 승인 완료된 인증이 없어요.' : '대기 중인 인증이 없어요. 첫 오운완을 올려보세요!')+'</span></div>'; return; }
   el.innerHTML=list.map(function(f){
-    var v=certVerdict(f.photoType, f.captureAt);
+    var v=certVerdict(f.photoType, f.captureAt, f.week_no);
     var tag='<span class="verify-tag '+v.cls+'">'+v.tag+'</span>';
     var action, line;
     if(f.mine){
@@ -1435,7 +1445,7 @@ async function approve(certId){
 /* 사진 뷰어 */
 function openPhoto(certId){
   var f=feed.filter(function(x){ return x.id===certId; })[0]; if(!f) return;
-  var v=certVerdict(f.photoType, f.captureAt);
+  var v=certVerdict(f.photoType, f.captureAt, f.week_no);
   var op=document.getElementById('ovPhoto');
   if(f.photoUrl){ op.style.backgroundImage='url('+f.photoUrl+')'; op.style.backgroundSize='cover'; op.style.backgroundPosition='center'; op.textContent=''; }
   else { op.style.backgroundImage=''; op.textContent='📷'; }
@@ -1443,7 +1453,7 @@ function openPhoto(certId){
   document.getElementById('ovAgo').textContent=relTime(f.created_at);
   document.getElementById('ovMemo').textContent=f.memo;
   document.getElementById('ovDate').textContent=v.date;
-  document.getElementById('ovWeek').textContent=CURRENT_WEEK+'주차 ('+rangeLabel(CURRENT_WEEK)+')';
+  document.getElementById('ovWeek').textContent=f.week_no+'주차 ('+rangeLabel(f.week_no)+')';
   var vd=document.getElementById('ovVerdict');
   vd.className='verify-tag '+v.cls;
   vd.textContent=v.tag;
@@ -1486,10 +1496,14 @@ function renderRank(){
   document.getElementById('rankTotal').textContent = sumFines().toLocaleString()+'원';
 }
 function renderSeasonEnd(){
+  document.getElementById('endSeasonNo').textContent = SEASON_NO;
+  document.getElementById('endWeeks').textContent = TOTAL_WEEKS;
   document.getElementById('endRankList').innerHTML = rankRows();
   document.getElementById('endTotal').textContent = sumFines().toLocaleString()+'원';
   document.getElementById('adminStartBox').classList.toggle('hidden', !state.isAdmin);
   document.getElementById('userWaitBox').classList.toggle('hidden', state.isAdmin);
+  // 자동 종료(고정) 상태면 '뒤로' 숨김 — 다른 화면 진입 불가
+  var back=document.getElementById('endBackBtn'); if(back) back.classList.toggle('hidden', isSeasonOver());
 }
 
 /* ──────── 마이 / 관리자 ──────── */
