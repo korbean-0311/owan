@@ -789,7 +789,7 @@ function inWeek(date, wk){
 }
 
 /* ──────── mock 상태 ──────── */
-var state = { nickname:"", goal:4, done:0, isAdmin:false, leverageLeft:2, leverageActive:false, membershipId:null, groupId:null, myUid:null };
+var state = { nickname:"", goal:4, done:0, isAdmin:false, leverageLeft:3, leverageActive:false, membershipId:null, groupId:null, myUid:null };
 
 var members = [];   // 그룹 멤버 (DB에서 로드)
 var feed = [];      // 인증 피드 (DB에서 로드)
@@ -1006,10 +1006,13 @@ async function loadSession(){
   return true;
 }
 
+/* 연속 미달 n회째 벌금 배수: 1,1,2,2,4,4,8,8… (2주마다 2배) */
+function failMult(n){ return Math.pow(2, Math.floor((n-1)/2)); }
+
 /* 방식 C: 주차 기록에서 벌금·주차상태를 즉석 계산
-   - 미달성 주차마다 벌금, 연속 실패 시 2배씩 누진
+   - 미달성 주차마다 벌금, 연속 실패 2주마다 2배씩 누진(failMult)
    - 면제(exempt) 주차는 건너뜀(중립)
-   - 레버리지 주차는 다음 주와 합산(2×목표)으로 판정
+   - 레버리지 주차는 다음 주와 합산(2×목표)으로 판정, 실패 시 두 주 벌금 합의 2배
    - 누적 상한 10만원 */
 function deriveSeason(recs, goal, curWeek, total){
   var base = goal===3?3000 : goal===4?2000 : 1000;
@@ -1023,13 +1026,14 @@ function deriveSeason(recs, goal, curWeek, total){
       if(w+1<curWeek){            // 두 주 모두 마감 → 합산 판정
         var pass=((r.done_count||0)+(r2.done_count||0)) >= goal*2;
         if(pass){ status[w]='done'; status[w+1]='done'; streak=0; }
-        else { streak++; fine+=base*Math.pow(2,streak-1); status[w]='fail';
-               streak++; fine+=base*Math.pow(2,streak-1); status[w+1]='fail'; }
+        else { streak++; var f1=base*failMult(streak); status[w]='fail';
+               streak++; var f2=base*failMult(streak); status[w+1]='fail';
+               fine += 2*(f1+f2); }   // 레버리지 실패: 두 주 벌금 합의 2배
         w+=2; continue;
       } else { status[w]='cur'; break; }   // 짝 주차가 진행중 → 보류
     }
     if((r.done_count||0) >= goal){ status[w]='done'; streak=0; }
-    else { streak++; fine+=base*Math.pow(2,streak-1); status[w]='fail'; }
+    else { streak++; fine+=base*failMult(streak); status[w]='fail'; }
     w++;
   }
   fine=Math.min(fine, FINE_CAP);
@@ -1196,11 +1200,11 @@ function renderStreakBanner(){
   }
   var el = document.getElementById('streakBanner'), html='';
   if(mode==='fail' && streak>0){
-    var mult = Math.pow(2, streak);            // 다음 실패 시 배수
+    var mult = failMult(streak+1);             // 다음(연속 streak+1회째) 실패 시 배수 — 2주마다 2배
     var amt = (fineBase*mult).toLocaleString();
     html = '<div class="banner bad"><span class="ic">⚠️</span><div class="t">'+
       '<b>'+streak+'주 연속 실패 중이에요.</b><br/>'+
-      '<span class="muted">이번 주도 놓치면 벌금이 <b style="color:var(--danger)">'+mult+'배('+amt+'원)</b>로 누적돼요. 오늘 바로 인증하세요!</span></div></div>';
+      '<span class="muted">이번 주도 놓치면 벌금 <b style="color:var(--danger)">'+amt+'원</b>'+(mult>1?' (<b style="color:var(--danger)">'+mult+'배</b>)':'')+'이 더 쌓여요. 오늘 바로 인증하세요!</span></div></div>';
   } else if(mode==='done' && streak>0){
     html = '<div class="banner good"><span class="ic">🔥</span><div class="t">'+
       '<b>'+streak+'주 연속 달성 중!</b><br/>'+
@@ -1635,16 +1639,16 @@ function renderLeverage(){
     return;
   }
   if(state.leverageActive){
-    el.innerHTML='<div class="row" style="margin-bottom:6px;"><b>⚡ 레버리지 사용중</b><span class="mute2 small">'+state.leverageLeft+'/2회 남음</span></div>'+
-      '<div class="muted small" style="line-height:1.55;">이번 주 판정을 다음 주와 합쳐 진행 중이에요. 위 진행률을 채우면 두 주 모두 인정돼요. 실패하면 두 주가 연속 미달로 처리돼 누진 벌금이 적용돼요.</div>';
+    el.innerHTML='<div class="row" style="margin-bottom:6px;"><b>⚡ 레버리지 사용중</b><span class="mute2 small">'+state.leverageLeft+'/3회 남음</span></div>'+
+      '<div class="muted small" style="line-height:1.55;">이번 주 판정을 다음 주와 합쳐 진행 중이에요. 위 진행률을 채우면 두 주 모두 인정돼요. 실패하면 <b style="color:var(--danger)">두 주 벌금 합의 2배</b>가 부과돼요.</div>';
     return;
   }
   if(CURRENT_WEEK>=TOTAL_WEEKS){
     el.innerHTML='<div class="row"><b class="muted">⚡ 레버리지</b><span class="mute2 small">마지막 주차엔 사용 불가</span></div>';
     return;
   }
-  el.innerHTML='<div class="row" style="margin-bottom:8px;"><b>⚡ 레버리지</b><span class="mute2 small">'+state.leverageLeft+'/2회 남음</span></div>'+
-    '<div class="muted small" style="margin-bottom:12px; line-height:1.55;">이번 주가 도저히 안 될 것 같다면?<br/>이번 주 판정을 다음 주와 합쳐 <b style="color:var(--text)">총 '+target+'회</b>로 미뤄요.</div>'+
+  el.innerHTML='<div class="row" style="margin-bottom:8px;"><b>⚡ 레버리지</b><span class="mute2 small">'+state.leverageLeft+'/3회 남음</span></div>'+
+    '<div class="muted small" style="margin-bottom:12px; line-height:1.55;">이번 주가 도저히 안 될 것 같다면?<br/>이번 주 판정을 다음 주와 합쳐 <b style="color:var(--text)">총 '+target+'회</b>로 미뤄요. 단 실패 시 <b style="color:var(--danger)">두 주 벌금 합의 2배</b>.</div>'+
     '<button class="btn ghost sm" style="width:100%;'+(state.leverageLeft<=0?' opacity:.4;':'')+'" onclick="useLeverage()">레버리지 사용하기</button>';
 }
 async function useLeverage(){

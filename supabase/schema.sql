@@ -39,7 +39,7 @@ create table public.memberships (
   weekly_goal   int  not null default 4,        -- 주당 목표 (시즌마다 재설정)
   fine          int  not null default 0,        -- 누적 벌금 (표시 시 10만원 상한)
   is_admin      boolean not null default false, -- 방장 여부 (RPC로만 부여)
-  leverage_left int  not null default 2,        -- 시즌당 남은 레버리지
+  leverage_left int  not null default 3,        -- 시즌당 남은 레버리지
   color         text,                           -- 가입 시 배정된 고정 아바타 색
   joined_at     timestamptz default now(),
   unique (group_id, profile_id)
@@ -328,5 +328,5 @@ begin
     where e.membership_id = m.id and m.group_id = p_group_id;
   delete from public.certifications c using public.memberships m
     where c.membership_id = m.id and m.group_id = p_group_id;
-  update public.memberships set fine = 0, leverage_left = 2 where group_id = p_group_id;
+  update public.memberships set fine = 0, leverage_left = 3 where group_id = p_group_id;
 end; $$;
