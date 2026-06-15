@@ -184,8 +184,9 @@
   .feed-item{display:flex; gap:12px; align-items:center;}
   .thumb{width:60px; height:60px; border-radius:13px; flex:0 0 60px; cursor:pointer;
     display:flex; align-items:center; justify-content:center; font-size:24px; position:relative;}
-  .thumb .zoom{position:absolute; bottom:3px; right:3px; font-size:10px; background:rgba(0,0,0,.5);
-    border-radius:6px; padding:1px 4px;}
+  .thumb .zoom{position:absolute; bottom:4px; right:4px; width:23px; height:23px; font-size:12px;
+    background:rgba(0,0,0,.62); border:1.5px solid rgba(255,255,255,.92); border-radius:50%;
+    box-shadow:0 1px 5px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center;}
   .cert-del{position:absolute; top:7px; right:9px; width:24px; height:24px; border-radius:50%;
     background:rgba(0,0,0,.55); color:#fff; display:flex; align-items:center; justify-content:center;
     font-size:12px; cursor:pointer; z-index:3;}
@@ -268,7 +269,7 @@
   .overlay{position:absolute; inset:0; background:rgba(5,7,10,.97); z-index:90;
     display:flex; flex-direction:column; opacity:0; pointer-events:none; transition:opacity .2s;}
   .overlay.show{opacity:1; pointer-events:auto;}
-  .ov-top{display:flex; justify-content:flex-end; padding:50px 22px 10px;}
+  .ov-top{display:flex; justify-content:flex-end; padding:calc(env(safe-area-inset-top) + 50px) 22px 10px;}
   .ov-close{font-size:20px; cursor:pointer; color:#fff; background:rgba(255,255,255,.12);
     width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
   .ov-photo{flex:0 0 320px; margin:0 22px; border-radius:18px; display:flex;
