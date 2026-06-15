@@ -245,6 +245,10 @@ begin
    where group_id=p_group_id and profile_id=auth.uid();
   if v_mid is null then raise exception '멤버가 아닙니다'; end if;
   if v_left <= 0 then raise exception '남은 레버리지가 없습니다'; end if;
+  -- 이번 주 첫 인증 전에만 사용 가능 (대기 포함 인증이 하나라도 있으면 차단)
+  if exists(select 1 from public.certifications where membership_id = v_mid and week_no = p_week_no) then
+    raise exception '이번 주에 이미 인증이 있어 레버리지를 쓸 수 없습니다';
+  end if;
   update public.memberships set leverage_left = leverage_left - 1 where id = v_mid;
   insert into public.weekly_records(membership_id, week_no, leveraged)
     values (v_mid, p_week_no, true)

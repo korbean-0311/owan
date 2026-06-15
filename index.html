@@ -1058,12 +1058,15 @@ async function loadGroupData(){
   var rows=mr.data||[];
   var ids=rows.map(function(r){ return r.id; });
   var recsBy={};
+  state.certifiedThisWeek=false;   // 이번 주 내 인증 존재 여부(대기 포함) — 레버리지 잠금용
   if(ids.length){
-    var both=await Promise.all([   // 인증·주차기록 병렬
+    var both=await Promise.all([   // 인증·주차기록·이번주 내인증 병렬
       db.from('certifications').select('membership_id,week_no').eq('status','approved').in('membership_id', ids),
-      db.from('weekly_records').select('membership_id,week_no,status,leveraged').in('membership_id', ids)
+      db.from('weekly_records').select('membership_id,week_no,status,leveraged').in('membership_id', ids),
+      db.from('certifications').select('id',{count:'exact',head:true}).eq('membership_id', state.membershipId).eq('week_no', CURRENT_WEEK)
     ]);
     var cf=both[0], wr=both[1];
+    state.certifiedThisWeek = ((both[2] && both[2].count) || 0) > 0;   // 대기·완료 무관 1건이라도 있으면 true
     // 운동 횟수 = '승인 완료(approved)'된 인증만 집계
     (cf.data||[]).forEach(function(c){
       var m=recsBy[c.membership_id]=recsBy[c.membership_id]||{};
@@ -1648,6 +1651,11 @@ function renderLeverage(){
     el.innerHTML='<div class="row"><b class="muted">⚡ 레버리지</b><span class="mute2 small">마지막 주차엔 사용 불가</span></div>';
     return;
   }
+  if(state.certifiedThisWeek){   // 이번 주 첫 인증 전에만 사용 가능
+    el.innerHTML='<div class="row"><b class="muted">⚡ 레버리지</b><span class="mute2 small">이번 주 첫 인증 전에만 가능</span></div>'+
+      '<div class="muted small" style="margin-top:8px; line-height:1.55;">이번 주에 이미 인증이 있어 이번 주차엔 레버리지를 쓸 수 없어요. 다음 주에 다시 가능해요.</div>';
+    return;
+  }
   el.innerHTML='<div class="row" style="margin-bottom:8px;"><b>⚡ 레버리지</b><span class="mute2 small">'+state.leverageLeft+'/3회 남음</span></div>'+
     '<div class="muted small" style="margin-bottom:12px; line-height:1.55;">이번 주가 도저히 안 될 것 같다면?<br/>이번 주 판정을 다음 주와 합쳐 <b style="color:var(--text)">총 '+target+'회</b>로 미뤄요. 단 실패 시 <b style="color:var(--danger)">두 주 벌금 합의 2배</b>.</div>'+
     '<button class="btn ghost sm" style="width:100%;'+(state.leverageLeft<=0?' opacity:.4;':'')+'" onclick="useLeverage()">레버리지 사용하기</button>';
@@ -1657,6 +1665,10 @@ async function useLeverage(){
   if(CURRENT_WEEK>=TOTAL_WEEKS){ toast('마지막 주차에는 레버리지를 쓸 수 없어요'); return; }
   if(state.leverageLeft<=0){ toast('이번 시즌 레버리지를 모두 사용했어요'); return; }
   if(state.leverageActive){ toast('이미 레버리지 사용 중이에요'); return; }
+  // 이번 주 첫 인증 전에만 가능 — 클릭 시점에 최신 조회(대기 포함)
+  var ac=await db.from('certifications').select('id',{count:'exact',head:true})
+    .eq('membership_id', state.membershipId).eq('week_no', CURRENT_WEEK);
+  if(((ac && ac.count)||0) > 0){ toast('이번 주에 이미 인증이 있어 레버리지를 쓸 수 없어요. 다음 주에 가능해요.'); return; }
   var r=await db.rpc('use_leverage',{p_group_id:state.groupId, p_week_no:CURRENT_WEEK});
   if(r.error){ toast('레버리지 사용 실패: '+r.error.message); return; }
   await loadGroupData(); renderHome();
