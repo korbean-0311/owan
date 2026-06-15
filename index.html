@@ -446,6 +446,8 @@
 
         <div id="streakBanner"></div>
 
+        <div class="card" id="approvalCard" style="display:none;"></div>
+
         <div class="card" id="leverageCard"></div>
 
         <button class="btn" id="homeCertifyBtn" onclick="go('certify')">📸 오운완 인증하기</button>
@@ -598,6 +600,9 @@
 
         <div class="sec-title">최종 순위</div>
         <div class="card" id="endRankList" style="padding:6px 14px;"></div>
+
+        <div class="sec-title">👏 이번 시즌 승인왕 <span class="mute2" style="font-weight:500;">(친구 인증 많이 눌러준 순)</span></div>
+        <div class="card" id="endApprovalList" style="padding:6px 14px;"></div>
 
         <!-- 관리자: 새 시즌 시작 -->
         <div id="adminStartBox" class="hidden">
@@ -767,6 +772,10 @@ function computeCurrentWeek(){
 function seasonEndExclusive(){ var d=new Date(SEASON_START); d.setDate(d.getDate()+TOTAL_WEEKS*7); return d; }
 /* 시즌 캘린더가 완전히 끝났는지 (마지막 주 말일이 지났는지) */
 function isSeasonOver(){ return CURRENT_WEEK>=1 && TODAY >= seasonEndExclusive(); }
+/* 시즌 절반 주차 (ceil(N/2)) — 8주→4, 12주→6 */
+function midSeasonWeek(){ return Math.ceil(TOTAL_WEEKS/2); }
+/* 지금이 절반 주차인지 (그 주에만 홈 승인왕 카드 노출) */
+function isMidSeasonWeek(){ return CURRENT_WEEK>=1 && CURRENT_WEEK===midSeasonWeek() && !isSeasonOver(); }
 /* 날짜 d까지 남은 일수(자정 기준) */
 function daysUntil(d){
   var a=new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate());
@@ -1106,7 +1115,11 @@ async function loadGroupData(){
     state.exemptThisWeek = (c.status==='exempt');   // 이번 주 면제됨
   }
 }
-async function refreshGroup(){ await loadGroupData(); renderHome(); renderRank(); renderCap(); }
+async function refreshGroup(){
+  await loadGroupData();
+  if(isMidSeasonWeek()){ try{ await loadApprovalRanking(); }catch(_){ approvalRanking=null; } } else { approvalRanking=null; }
+  renderHome(); renderRank(); renderCap();
+}
 
 /* ──────── 홈 렌더 ──────── */
 function renderHome(){
@@ -1178,9 +1191,10 @@ function renderHome(){
     var tied = members.filter(function(x){ return fineOf(x) === myFine; }).length > 1;
     rankEl.innerHTML = (tied?'<span style="font-size:13px; color:var(--text-dim)">공동 </span>':'') + rank + '<span style="font-size:15px; color:var(--text-dim)">위</span>';
   } else { rankEl.textContent='-'; }
-  // 연속 배너 + 레버리지
+  // 연속 배너 + 레버리지 + 승인왕(절반 주차만)
   renderStreakBanner();
   renderLeverage();
+  renderApprovalCard();
 }
 
 /* 직전 주차들로부터 연속 성공/실패 streak 계산 → 배너 */
@@ -1512,11 +1526,74 @@ function renderRank(){
   document.getElementById('rankList').innerHTML = rankRows();
   document.getElementById('rankTotal').textContent = sumFines().toLocaleString()+'원';
 }
+
+/* ──────── 승인왕 (남의 인증 승인 많이 눌러준 순위) ──────── */
+var approvalRanking = null;
+async function loadApprovalRanking(){
+  approvalRanking = [];
+  if(!state.groupId || !members.length) return approvalRanking;
+  // 이 그룹 인증들에 달린 승인 → approver_id 수집 (그룹 한정)
+  var r = await db.from('certification_approvals')
+    .select('approver_id, certifications!inner(memberships!inner(group_id))')
+    .eq('certifications.memberships.group_id', state.groupId);
+  var cnt = {};
+  (r.data||[]).forEach(function(a){ cnt[a.approver_id] = (cnt[a.approver_id]||0) + 1; });
+  var list = members.map(function(m){
+    return { name:m.name, color:m.color, me:m.me, count: cnt[m.profileId]||0 };
+  });
+  list.sort(function(a,b){ return b.count - a.count; });   // 많이 누른 순
+  list.forEach(function(e){
+    e.rank = list.filter(function(x){ return x.count > e.count; }).length + 1;   // 공동순위
+    e.tied = list.filter(function(x){ return x.count === e.count; }).length > 1;
+  });
+  approvalRanking = list;
+  return list;
+}
+function approvalRow(e){
+  var medal = e.rank<=3 ? ['🥇','🥈','🥉'][e.rank-1] : e.rank;
+  var tieTag = e.tied ? ' <span class="pill" style="padding:1px 7px;">공동</span>' : '';
+  return '<div class="rank-row"'+(e.me?' style="background:rgba(57,224,138,.08); border-radius:10px;"':'')+'>'+
+    '<div class="rank-no '+(e.rank<=3?'top':'')+'">'+medal+'</div>'+
+    '<div class="avatar" style="background:'+e.color+'; color:'+textOn(e.color)+'; width:34px; height:34px; flex:0 0 34px; font-size:13px;">'+e.name.charAt(0)+'</div>'+
+    '<div style="flex:1;"><b style="font-size:14px;">'+e.name+'</b>'+(e.me?' <span class="pill accent" style="padding:2px 7px;">나</span>':'')+tieTag+'</div>'+
+    '<div class="rank-amt">'+e.count+'<span class="mute2 small">번</span></div>'+
+  '</div>';
+}
+var ellipsisRow = '<div class="wk-result" style="justify-content:center; padding:5px 4px;"><span class="mute2 small">⋯</span></div>';
+/* 홈 카드 — 절반 주차에만 노출. Top3 + Bottom3 + 본인 */
+function renderApprovalCard(){
+  var el = document.getElementById('approvalCard'); if(!el) return;
+  if(!isMidSeasonWeek() || !approvalRanking || !approvalRanking.length){ el.style.display='none'; return; }
+  el.style.display='';
+  var list = approvalRanking, rows;
+  if(list.length <= 6){
+    rows = list.map(approvalRow).join('');
+  } else {
+    var top = list.slice(0,3), bottom = list.slice(-3);
+    var me = list.filter(function(e){ return e.me; })[0];
+    var meInEnds = top.indexOf(me)>=0 || bottom.indexOf(me)>=0;
+    rows = top.map(approvalRow).join('');
+    if(me && !meInEnds) rows += ellipsisRow + approvalRow(me);   // 중간이면 본인 순위를 top↔bottom 사이에
+    rows += ellipsisRow + bottom.map(approvalRow).join('');
+  }
+  el.innerHTML =
+    '<div class="row" style="margin-bottom:4px;"><b>👏 이번 시즌 승인왕</b><span class="mute2 small">절반 결산</span></div>'+
+    '<div class="mute2 small" style="margin-bottom:11px; line-height:1.5;">친구 인증 많이 눌러준 순이에요. 피드에서 승인하고 순위 올려봐요!</div>'+
+    rows+
+    '<button class="btn ghost sm" style="width:100%; margin-top:12px;" onclick="go(\'feed\')">피드에서 친구 인증 승인하기 →</button>';
+}
 function renderSeasonEnd(){
   document.getElementById('endSeasonNo').textContent = SEASON_NO;
   document.getElementById('endWeeks').textContent = TOTAL_WEEKS;
   document.getElementById('endRankList').innerHTML = rankRows();
   document.getElementById('endTotal').textContent = sumFines().toLocaleString()+'원';
+  // 승인왕 섹션 (비동기 로드 — 전원 표시)
+  var ea=document.getElementById('endApprovalList');
+  ea.innerHTML='<div class="wk-result"><span class="mute2 small">불러오는 중…</span></div>';
+  loadApprovalRanking().then(function(list){
+    ea.innerHTML = (list && list.length) ? list.map(approvalRow).join('')
+      : '<div class="wk-result"><span class="mute2 small">아직 승인 기록이 없어요</span></div>';
+  });
   document.getElementById('adminStartBox').classList.toggle('hidden', !state.isAdmin);
   document.getElementById('userWaitBox').classList.toggle('hidden', state.isAdmin);
   // 자동 종료(고정) 상태면 '뒤로' 숨김 — 다른 화면 진입 불가
