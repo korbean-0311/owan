@@ -772,8 +772,8 @@ function computeCurrentWeek(){
 function seasonEndExclusive(){ var d=new Date(SEASON_START); d.setDate(d.getDate()+TOTAL_WEEKS*7); return d; }
 /* 시즌 캘린더가 완전히 끝났는지 (마지막 주 말일이 지났는지) */
 function isSeasonOver(){ return CURRENT_WEEK>=1 && TODAY >= seasonEndExclusive(); }
-/* 시즌 절반 주차 (ceil(N/2)) — 8주→4, 12주→6 */
-function midSeasonWeek(){ return Math.ceil(TOTAL_WEEKS/2); }
+/* 시즌 절반 주차 (floor(N/2)) — 8주→4, 12주→6, 7주→3 (홀수는 절반 직전 주) */
+function midSeasonWeek(){ return Math.floor(TOTAL_WEEKS/2); }
 /* 지금이 절반 주차인지 (그 주에만 홈 승인왕 카드 노출) */
 function isMidSeasonWeek(){ return CURRENT_WEEK>=1 && CURRENT_WEEK===midSeasonWeek() && !isSeasonOver(); }
 /* 날짜 d까지 남은 일수(자정 기준) */
