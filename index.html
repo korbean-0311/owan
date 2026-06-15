@@ -1653,7 +1653,7 @@ function renderLeverage(){
   }
   if(state.certifiedThisWeek){   // 이번 주 첫 인증 전에만 사용 가능
     el.innerHTML='<div class="row"><b class="muted">⚡ 레버리지</b><span class="mute2 small">이번 주 첫 인증 전에만 가능</span></div>'+
-      '<div class="muted small" style="margin-top:8px; line-height:1.55;">이번 주에 이미 인증이 있어 이번 주차엔 레버리지를 쓸 수 없어요. 다음 주에 다시 가능해요.</div>';
+      '<div class="muted small" style="margin-top:8px; line-height:1.55;">이번 주에 이미 인증이 있어 이번 주차엔 레버리지를 쓸 수 없어요.<br/>다음 주에 다시 가능해요.</div>';
     return;
   }
   el.innerHTML='<div class="row" style="margin-bottom:8px;"><b>⚡ 레버리지</b><span class="mute2 small">'+state.leverageLeft+'/3회 남음</span></div>'+
