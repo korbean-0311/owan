@@ -769,6 +769,9 @@ function computeCurrentWeek(){
   var wk = Math.floor((TODAY - SEASON_START)/(7*86400000))+1;
   return Math.min(Math.max(wk,0), TOTAL_WEEKS);   // 시작 전이면 0(대기), 종료 후 상한 TOTAL_WEEKS
 }
+/* 현재 시각·주차 새로고침 — TODAY는 로드시 스냅샷이라, 경계(3시/주차)를 넘긴 채
+   앱을 켜둔 경우를 대비해 홈 진입·제출 시점에 다시 계산해 stale 방지 */
+function refreshNow(){ TODAY = new Date(Date.now() - DAY_SHIFT_MS); CURRENT_WEEK = computeCurrentWeek(); }
 /* 시즌 종료 다음날 0시(exclusive) — 마지막 주 말일 다음날 */
 function seasonEndExclusive(){ var d=new Date(SEASON_START); d.setDate(d.getDate()+TOTAL_WEEKS*7); return d; }
 /* 시즌 캘린더가 완전히 끝났는지 (마지막 주 말일이 지났는지) */
@@ -1118,6 +1121,7 @@ async function loadGroupData(){
   }
 }
 async function refreshGroup(){
+  refreshNow();   // 경계 넘긴 stale 방지 (홈/랭킹 진입 때마다 현재 주차 재계산)
   await loadGroupData();
   if(isMidSeasonWeek()){ try{ await loadApprovalRanking(); }catch(_){ approvalRanking=null; } } else { approvalRanking=null; }
   renderHome(); renderRank(); renderCap();
@@ -1242,6 +1246,7 @@ var selectedFile=null, uploadType='photo', captureAt=null;
 async function handleFile(e, source){
   var file = e.target.files && e.target.files[0];
   if(!file) return;
+  refreshNow();   // 첨부 시점의 현재 주차로 미리보기/검증
   selectedFile = file;
   // 미리보기
   document.getElementById('upPh').style.display='none';
@@ -1314,6 +1319,7 @@ function pathFromUrl(url){
 }
 async function submitCertify(){
   if(!state.membershipId){ toast('로그인이 필요해요'); return; }
+  refreshNow();   // 제출 순간의 실제 주차로 (앱 켜둔 채 경계 넘긴 경우 대비)
   if(CURRENT_WEEK<1){ toast('아직 시즌이 시작되지 않았어요. '+fmtStartLabel(SEASON_START)+'부터 인증할 수 있어요.'); return; }
   var tgt = state.leverageActive ? state.goal*2 : state.goal;
   if(state.done >= tgt){ toast('이번 주 목표를 이미 다 채웠어요! 🎉'); go('certify'); return; }
