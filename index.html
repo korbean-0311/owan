@@ -760,7 +760,8 @@ function nickToEmail(nick){
 }
 
 /* ──────── 달력 동기화 ──────── */
-var TODAY = new Date();                     // 실제 오늘
+var DAY_SHIFT_MS = 3*3600*1000;             // 하루 경계 = 새벽 3시 (밤샘 운동 배려: 02:59까지는 전날로 판정)
+var TODAY = new Date(Date.now() - DAY_SHIFT_MS);   // '오늘'(새벽 3시 기준 — 3시간 당긴 시각)
 var SEASON_START = new Date(2026,4,11);     // 시즌 시작일 (방장이 설정) ※ month 0-index
 var TOTAL_WEEKS = 8;                         // 시즌 진행 주차 수 (방장이 설정)
 var CURRENT_WEEK = 3;                        // 오늘이 속한 주차
@@ -794,8 +795,9 @@ function fmtMD(d){ return (d.getMonth()+1)+'.'+d.getDate(); }
 function rangeLabel(wk){ var r=weekRange(wk); return fmtMD(r.s)+'~'+fmtMD(r.e); }
 function inWeek(date, wk){
   var r=weekRange(wk);
+  var d=new Date(date.getTime() - DAY_SHIFT_MS);   // 새벽 3시 기준으로 당겨서 주차 판정(주 경계가 Mon 03:00)
   var end=new Date(r.e.getFullYear(),r.e.getMonth(),r.e.getDate(),23,59,59);
-  return date>=r.s && date<=end;
+  return d>=r.s && d<=end;
 }
 
 /* ──────── mock 상태 ──────── */
@@ -1681,7 +1683,7 @@ async function renderRecords(){
   if(state.membershipId){
     var cf=await db.from('certifications').select('created_at,capture_at')
       .eq('membership_id', state.membershipId).eq('week_no', CURRENT_WEEK).eq('status','approved');
-    (cf.data||[]).forEach(function(c){ var d=new Date(c.capture_at||c.created_at); doneDays[d.getMonth()+'-'+d.getDate()]=true; });
+    (cf.data||[]).forEach(function(c){ var d=new Date(new Date(c.capture_at||c.created_at).getTime() - DAY_SHIFT_MS); doneDays[d.getMonth()+'-'+d.getDate()]=true; });
   }
   var html='';
   for(var i=0;i<7;i++){
