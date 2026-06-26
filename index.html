@@ -1278,25 +1278,26 @@ async function handleFile(e, source){
     toast('직접 촬영 사진 첨부 완료');
     return;
   }
-  // 갤러리 → EXIF로 판별
+  // 갤러리 → EXIF 카메라 태그로 사진/화면캡쳐 판별 (Make/Model/DateTimeOriginal = 진짜 카메라 사진)
   var exif=null; try{ exif=await exifr.parse(file); }catch(_){}
+  var camTag = exif && (exif.Make || exif.Model || exif.DateTimeOriginal);   // 스크린샷엔 없는 카메라 태그
   var dto = exif && (exif.DateTimeOriginal || exif.CreateDate || exif.ModifyDate);
-  if(dto){ uploadType='photo'; captureAt=new Date(dto); }
+  if(camTag){ uploadType='photo'; captureAt = dto ? new Date(dto) : null; }
   else { uploadType='capture'; captureAt=null; }
   if(uploadType==='capture'){
-    document.getElementById('metaDate').textContent='— (메타데이터 없음)';
-    vd.className='verify-tag bad'; vd.textContent='📷 메타데이터 없음 · 멤버 확인';
-    document.getElementById('metaNote').textContent='촬영 메타데이터가 없어요 (휴대폰·메신저가 제거했을 수 있어요). 멤버 2명 승인으로 인증돼요.';
-    toast('사진 첨부 · 멤버 승인이 필요해요');
+    document.getElementById('metaDate').textContent='— (화면 캡쳐)';
+    vd.className='verify-tag bad'; vd.textContent='📷 화면 캡쳐 · 멤버 확인';
+    document.getElementById('metaNote').textContent='카메라 정보가 없는 화면 캡쳐(스크린샷)로 보여요. 멤버 2명 승인으로 인증돼요.';
+    toast('화면 캡쳐 첨부 · 멤버 승인이 필요해요');
   } else {
-    var ok=inWeek(captureAt, CURRENT_WEEK);
-    document.getElementById('metaDate').textContent=fmtDateTime(captureAt);
+    var ok = captureAt ? inWeek(captureAt, CURRENT_WEEK) : true;
+    document.getElementById('metaDate').textContent = captureAt ? fmtDateTime(captureAt) : '카메라 사진 (촬영일 없음)';
     vd.className='verify-tag '+(ok?'ok':'bad');
-    vd.textContent=ok?'✓ 메타데이터 인증':'⚠ 이전 주차 사진';
+    vd.textContent = ok ? '✓ 카메라 사진' : '⚠ 이전 주차 사진';
     document.getElementById('metaNote').textContent= ok
-      ? '촬영일이 이번 주차 안에 있어 자동 확인돼요.'
-      : '촬영일이 이번 주차를 벗어났어요. 멤버 확인이 필요해요.';
-    toast('갤러리 사진 첨부 · 촬영일 확인됨');
+      ? (captureAt ? '카메라로 찍은 사진이에요 · 촬영일이 이번 주차 안이에요.' : '카메라로 찍은 사진이에요.')
+      : '카메라 사진이지만 촬영일이 이번 주차를 벗어났어요. 멤버 확인이 필요해요.';
+    toast('카메라 사진 첨부됨');
   }
 }
 /* 업로드 전 이미지 압축 (가장 긴 변 ≤1600px, JPEG 0.82). 확대해도 폰 화면에선 선명.
@@ -1411,11 +1412,11 @@ async function loadFeed(){
 async function refreshFeed(){ await loadFeed(); renderFeed(); }
 function certVerdict(pt, capIso, weekNo){
   if(pt==='camera') return {cls:'ok', tag:'✓ 직접 촬영', date: capIso?fmtDateTime(new Date(capIso)):'방금 촬영'};
-  if(pt==='capture') return {cls:'bad', tag:'📷 메타데이터 없음', date:'— (메타데이터 없음)'};
+  if(pt==='capture') return {cls:'bad', tag:'📷 화면 캡쳐 · 멤버 확인', date:'— (화면 캡쳐)'};
   var d=capIso ? new Date(capIso) : null;
-  var ok=d && inWeek(d, weekNo);   // 인증의 실제 주차로 검증 (현재 주차가 아님)
-  return ok ? {cls:'ok', tag:'✓ 메타데이터 인증', date:fmtDateTime(d)}
-            : {cls:'bad', tag:'⚠ 범위 밖', date:d?fmtDateTime(d):'—'};
+  var ok = d ? inWeek(d, weekNo) : true;   // 인증의 실제 주차로 검증 (날짜 없으면 카메라 사진으로 인정)
+  return ok ? {cls:'ok', tag:'✓ 카메라 사진', date: d?fmtDateTime(d):'카메라 사진'}
+            : {cls:'bad', tag:'⚠ 범위 밖', date:fmtDateTime(d)};
 }
 var feedFilter='pending';   // 'pending' | 'approved'
 function toggleFeedFilter(){
