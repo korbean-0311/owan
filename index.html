@@ -1278,11 +1278,14 @@ async function handleFile(e, source){
     toast('직접 촬영 사진 첨부 완료');
     return;
   }
-  // 갤러리 → EXIF 카메라 태그로 사진/화면캡쳐 판별 (Make/Model/DateTimeOriginal = 진짜 카메라 사진)
+  // 갤러리 → 촬영 광학 정보(조리개/노출/ISO/초점거리/렌즈)로 사진/화면캡쳐 판별.
+  //   스크린샷엔 렌즈·센서가 없어 이 값들이 물리적으로 없음 (Make/Model은 일부 폰 스샷에도 박혀서 안 씀)
   var exif=null; try{ exif=await exifr.parse(file); }catch(_){}
-  var camTag = exif && (exif.Make || exif.Model || exif.DateTimeOriginal);   // 스크린샷엔 없는 카메라 태그
-  var dto = exif && (exif.DateTimeOriginal || exif.CreateDate || exif.ModifyDate);
-  if(camTag){ uploadType='photo'; captureAt = dto ? new Date(dto) : null; }
+  var camTag = exif && (exif.FNumber || exif.ExposureTime || exif.ISO || exif.ISOSpeedRatings ||
+                        exif.FocalLength || exif.FocalLengthIn35mmFormat || exif.LensModel || exif.LensMake ||
+                        exif.ApertureValue || exif.ShutterSpeedValue);
+  var dto = exif && (exif.DateTimeOriginal || exif.CreateDate || exif.ModifyDate);   // 날짜는 표시·주차검증용
+  if(camTag){ uploadType='photo'; captureAt = (exif.DateTimeOriginal ? new Date(exif.DateTimeOriginal) : (dto ? new Date(dto) : null)); }
   else { uploadType='capture'; captureAt=null; }
   if(uploadType==='capture'){
     document.getElementById('metaDate').textContent='— (화면 캡쳐)';
