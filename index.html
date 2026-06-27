@@ -280,7 +280,7 @@
   .ov-top{display:flex; justify-content:flex-end; padding:calc(env(safe-area-inset-top) + 50px) 22px 10px;}
   .ov-close{font-size:20px; cursor:pointer; color:#fff; background:rgba(255,255,255,.12);
     width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;}
-  .ov-photo{flex:0 0 320px; margin:0 22px; border-radius:18px; display:flex;
+  .ov-photo{flex:1; min-height:200px; margin:0 22px; border-radius:18px; background:rgba(0,0,0,.25); display:flex;
     align-items:center; justify-content:center; font-size:90px;}
   .ov-info{padding:18px 22px;}
 
@@ -1516,7 +1516,7 @@ function openPhoto(certId){
   var f=feed.filter(function(x){ return x.id===certId; })[0]; if(!f) return;
   var v=certVerdict(f.photoType, f.captureAt, f.week_no);
   var op=document.getElementById('ovPhoto');
-  if(f.photoUrl){ op.style.backgroundImage='url('+f.photoUrl+')'; op.style.backgroundSize='cover'; op.style.backgroundPosition='center'; op.textContent=''; }
+  if(f.photoUrl){ op.style.backgroundImage='url('+f.photoUrl+')'; op.style.backgroundSize='contain'; op.style.backgroundRepeat='no-repeat'; op.style.backgroundPosition='center'; op.textContent=''; }
   else { op.style.backgroundImage=''; op.textContent='📷'; }
   document.getElementById('ovName').textContent=f.name;
   document.getElementById('ovAgo').textContent=relTime(f.created_at);
