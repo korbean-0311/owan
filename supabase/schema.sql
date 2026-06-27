@@ -92,7 +92,7 @@ language plpgsql security definer set search_path=public as $$
 begin
   update public.certifications c
      set approvals = (select count(*) from public.certification_approvals where certification_id = c.id),
-         status    = case when (select count(*) from public.certification_approvals where certification_id = c.id) >= 2
+         status    = case when (select count(*) from public.certification_approvals where certification_id = c.id) >= 3
                           then 'approved' else 'pending' end
    where c.id = coalesce(new.certification_id, old.certification_id);
   return null;
