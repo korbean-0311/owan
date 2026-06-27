@@ -784,10 +784,8 @@ function refreshNow(){ TODAY = new Date(Date.now() - DAY_SHIFT_MS); CURRENT_WEEK
 function seasonEndExclusive(){ var d=new Date(SEASON_START); d.setDate(d.getDate()+TOTAL_WEEKS*7); return d; }
 /* 시즌 캘린더가 완전히 끝났는지 (마지막 주 말일이 지났는지) */
 function isSeasonOver(){ return CURRENT_WEEK>=1 && TODAY >= seasonEndExclusive(); }
-/* 시즌 절반 주차 (floor(N/2)) — 8주→4, 12주→6, 7주→3 (홀수는 절반 직전 주) */
-function midSeasonWeek(){ return Math.floor(TOTAL_WEEKS/2); }
-/* 지금이 절반 주차인지 (그 주에만 홈 승인왕 카드 노출) */
-function isMidSeasonWeek(){ return CURRENT_WEEK>=1 && CURRENT_WEEK===midSeasonWeek() && !isSeasonOver(); }
+/* 승인왕 홈 카드 노출 주차 — 3주마다(3,6,9,12…) 그 한 주만. 시즌 종료 후엔 정산 화면에서 표시 */
+function isApprovalWeek(){ return CURRENT_WEEK>=1 && CURRENT_WEEK%3===0 && !isSeasonOver(); }
 /* 날짜 d까지 남은 일수(자정 기준) */
 function daysUntil(d){
   var a=new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate());
@@ -1131,7 +1129,7 @@ async function loadGroupData(){
 async function refreshGroup(){
   refreshNow();   // 경계 넘긴 stale 방지 (홈/랭킹 진입 때마다 현재 주차 재계산)
   await loadGroupData();
-  if(isMidSeasonWeek()){ try{ await loadApprovalRanking(); }catch(_){ approvalRanking=null; } } else { approvalRanking=null; }
+  if(isApprovalWeek()){ try{ await loadApprovalRanking(); }catch(_){ approvalRanking=null; } } else { approvalRanking=null; }
   renderHome(); renderRank(); renderCap();
 }
 
@@ -1603,7 +1601,7 @@ var ellipsisRow = '<div class="wk-result" style="justify-content:center; padding
 /* 홈 카드 — 절반 주차에만 노출. Top3 + Bottom3 + 본인 */
 function renderApprovalCard(){
   var el = document.getElementById('approvalCard'); if(!el) return;
-  if(!isMidSeasonWeek() || !approvalRanking || !approvalRanking.length){ el.style.display='none'; return; }
+  if(!isApprovalWeek() || !approvalRanking || !approvalRanking.length){ el.style.display='none'; return; }
   el.style.display='';
   var list = approvalRanking, rows;
   if(list.length <= 6){
@@ -1617,7 +1615,7 @@ function renderApprovalCard(){
     rows += ellipsisRow + bottom.map(approvalRow).join('');
   }
   el.innerHTML =
-    '<div class="row" style="margin-bottom:4px;"><b>👏 이번 시즌 승인왕</b><span class="mute2 small">절반 결산</span></div>'+
+    '<div class="row" style="margin-bottom:4px;"><b>👏 이번 시즌 승인왕</b><span class="mute2 small">'+CURRENT_WEEK+'주차 집계</span></div>'+
     '<div class="mute2 small" style="margin-bottom:11px; line-height:1.5;">친구 인증 많이 눌러준 순이에요. 피드에서 승인하고 순위 올려봐요!</div>'+
     rows+
     '<button class="btn ghost sm" style="width:100%; margin-top:12px;" onclick="go(\'feed\')">피드에서 친구 인증 승인하기 →</button>';
