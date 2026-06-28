@@ -768,21 +768,28 @@ function nickToEmail(nick){
 
 /* ──────── 달력 동기화 ──────── */
 var DAY_SHIFT_MS = 3*3600*1000;             // 하루 경계 = 새벽 3시 (밤샘 운동 배려: 02:59까지는 전날로 판정)
+var WEEK_CLOSE_MS = 12*3600*1000;           // 주차 마감 = 월요일 정오 12시 (일요일 밤 인증 승인 유예)
+var NOW = new Date();
 var TODAY = new Date(Date.now() - DAY_SHIFT_MS);   // '오늘'(새벽 3시 기준 — 3시간 당긴 시각)
 var SEASON_START = new Date(2026,4,11);     // 시즌 시작일 (방장이 설정) ※ month 0-index
 var TOTAL_WEEKS = 8;                         // 시즌 진행 주차 수 (방장이 설정)
 var CURRENT_WEEK = 3;                        // 오늘이 속한 주차
 function computeCurrentWeek(){
-  var wk = Math.floor((TODAY - SEASON_START)/(7*86400000))+1;
-  return Math.min(Math.max(wk,0), TOTAL_WEEKS);   // 시작 전이면 0(대기), 종료 후 상한 TOTAL_WEEKS
+  if(NOW < SEASON_START) return 0;
+  for(var wk=1; wk<=TOTAL_WEEKS; wk++){
+    if(NOW < weekCloseExclusive(wk)) return wk;
+  }
+  return TOTAL_WEEKS;   // 종료 후 상한 TOTAL_WEEKS
 }
 /* 현재 시각·주차 새로고침 — TODAY는 로드시 스냅샷이라, 경계(3시/주차)를 넘긴 채
    앱을 켜둔 경우를 대비해 홈 진입·제출 시점에 다시 계산해 stale 방지 */
-function refreshNow(){ TODAY = new Date(Date.now() - DAY_SHIFT_MS); CURRENT_WEEK = computeCurrentWeek(); }
-/* 시즌 종료 다음날 0시(exclusive) — 마지막 주 말일 다음날 */
-function seasonEndExclusive(){ var d=new Date(SEASON_START); d.setDate(d.getDate()+TOTAL_WEEKS*7); return d; }
-/* 시즌 캘린더가 완전히 끝났는지 (마지막 주 말일이 지났는지) */
-function isSeasonOver(){ return CURRENT_WEEK>=1 && TODAY >= seasonEndExclusive(); }
+function refreshNow(){ NOW = new Date(); TODAY = new Date(Date.now() - DAY_SHIFT_MS); CURRENT_WEEK = computeCurrentWeek(); }
+/* 각 주차 마감 시각(exclusive) — 주차 시작일 기준 다음 월요일 정오 */
+function weekCloseExclusive(wk){ var d=new Date(SEASON_START); d.setDate(d.getDate()+wk*7); d.setTime(d.getTime()+WEEK_CLOSE_MS); return d; }
+/* 시즌 종료 시각(exclusive) — 마지막 주 마감 월요일 정오 */
+function seasonEndExclusive(){ return weekCloseExclusive(TOTAL_WEEKS); }
+/* 시즌 캘린더가 완전히 끝났는지 (마지막 주 마감이 지났는지) */
+function isSeasonOver(){ return CURRENT_WEEK>=1 && NOW >= seasonEndExclusive(); }
 /* 승인왕 홈 카드 노출 주차 — 3주마다(3,6,9,12…) 그 한 주만. 시즌 종료 후엔 정산 화면에서 표시 */
 function isApprovalWeek(){ return CURRENT_WEEK>=1 && CURRENT_WEEK%3===0 && !isSeasonOver(); }
 /* 날짜 d까지 남은 일수(자정 기준) */
@@ -801,11 +808,11 @@ function weekRange(wk){
 }
 function fmtMD(d){ return (d.getMonth()+1)+'.'+d.getDate(); }
 function rangeLabel(wk){ var r=weekRange(wk); return fmtMD(r.s)+'~'+fmtMD(r.e); }
+function closeLabel(wk){ var d=weekCloseExclusive(wk); return fmtMD(d)+' 12:00 마감'; }
 function inWeek(date, wk){
-  var r=weekRange(wk);
-  var d=new Date(date.getTime() - DAY_SHIFT_MS);   // 새벽 3시 기준으로 당겨서 주차 판정(주 경계가 Mon 03:00)
-  var end=new Date(r.e.getFullYear(),r.e.getMonth(),r.e.getDate(),23,59,59);
-  return d>=r.s && d<=end;
+  var start = wk===1 ? new Date(SEASON_START) : weekCloseExclusive(wk-1);
+  var end = weekCloseExclusive(wk);
+  return date>=start && date<end;
 }
 
 /* ──────── mock 상태 ──────── */
@@ -1144,7 +1151,7 @@ function renderHome(){
   document.getElementById('hWeekRange').textContent = preSeason ? '시작 대기' : CURRENT_WEEK+'주차';
   document.getElementById('hWeekDates').textContent = preSeason
     ? fmtStartLabel(SEASON_START)+' 시작 예정'
-    : CURRENT_WEEK+'주차 · '+rangeLabel(CURRENT_WEEK);
+    : CURRENT_WEEK+'주차 · '+rangeLabel(CURRENT_WEEK)+' · '+closeLabel(CURRENT_WEEK);
   // 시즌바
   document.getElementById('seasonBar').innerHTML = weeks.map(function(w){ return '<div class="wk '+w+'"></div>'; }).join('');
   // 홈 인증 버튼 — 대기 중엔 잠금
@@ -1264,7 +1271,7 @@ async function handleFile(e, source){
 
   var mc=document.getElementById('metaCard'); mc.classList.remove('hidden');
   var vd=document.getElementById('metaVerdict');
-  document.getElementById('metaWeek').textContent=CURRENT_WEEK+'주차 ('+rangeLabel(CURRENT_WEEK)+')';
+  document.getElementById('metaWeek').textContent=CURRENT_WEEK+'주차 ('+rangeLabel(CURRENT_WEEK)+' · '+closeLabel(CURRENT_WEEK)+')';
 
   if(source==='camera'){
     // 카메라 강제 입력(capture)으로 들어온 사진 = 방금 직접 촬영 → 신뢰
@@ -1446,7 +1453,7 @@ function renderFeed(){
   order.sort(function(a,b){ return b-a; });
   el.innerHTML=order.map(function(w, idx){
     var label = w>=1 ? w+'주차' : '시작 전';
-    var range = w>=1 ? rangeLabel(w) : '';
+    var range = w>=1 ? rangeLabel(w)+' · '+closeLabel(w) : '';
     var open = idx===0 ? ' open' : '';
     return '<div class="wk-group'+open+'">'+
       '<div class="wk-head" onclick="this.closest(\'.wk-group\').classList.toggle(\'open\')">'+
@@ -1526,7 +1533,7 @@ function openPhoto(certId){
   document.getElementById('ovAgo').textContent=relTime(f.created_at);
   document.getElementById('ovMemo').textContent=f.memo;
   document.getElementById('ovDate').textContent=v.date;
-  document.getElementById('ovWeek').textContent=f.week_no+'주차 ('+rangeLabel(f.week_no)+')';
+  document.getElementById('ovWeek').textContent=f.week_no+'주차 ('+rangeLabel(f.week_no)+' · '+closeLabel(f.week_no)+')';
   var vd=document.getElementById('ovVerdict');
   vd.className='verify-tag '+v.cls;
   vd.textContent=v.tag;
@@ -1639,22 +1646,12 @@ function approvalRow(e){
   '</div>';
 }
 var ellipsisRow = '<div class="wk-result" style="justify-content:center; padding:5px 4px;"><span class="mute2 small">⋯</span></div>';
-/* 홈 카드 — 절반 주차에만 노출. Top3 + Bottom3 + 본인 */
+/* 홈 카드 — 3주마다 노출. 승인왕 전체 순위 */
 function renderApprovalCard(){
   var el = document.getElementById('approvalCard'); if(!el) return;
   if(!isApprovalWeek() || !approvalRanking || !approvalRanking.length){ el.style.display='none'; return; }
   el.style.display='';
-  var list = approvalRanking, rows;
-  if(list.length <= 6){
-    rows = list.map(approvalRow).join('');
-  } else {
-    var top = list.slice(0,3), bottom = list.slice(-3);
-    var me = list.filter(function(e){ return e.me; })[0];
-    var meInEnds = top.indexOf(me)>=0 || bottom.indexOf(me)>=0;
-    rows = top.map(approvalRow).join('');
-    if(me && !meInEnds) rows += ellipsisRow + approvalRow(me);   // 중간이면 본인 순위를 top↔bottom 사이에
-    rows += ellipsisRow + bottom.map(approvalRow).join('');
-  }
+  var rows = approvalRanking.map(approvalRow).join('');
   el.innerHTML =
     '<div class="row" style="margin-bottom:4px;"><b>👏 이번 시즌 승인왕</b><span class="mute2 small">'+CURRENT_WEEK+'주차 집계</span></div>'+
     '<div class="mute2 small" style="margin-bottom:11px; line-height:1.5;">친구 인증 많이 눌러준 순이에요. 피드에서 승인하고 순위 올려봐요!</div>'+
@@ -1755,7 +1752,7 @@ async function renderRecords(){
   var calWeek = preSeason ? 1 : CURRENT_WEEK;   // 대기 중엔 1주차 달력 미리보기
   var r=weekRange(calWeek);
   document.getElementById('recWeekTitle').textContent = preSeason ? '시즌 시작 전 · 1주차(예정)' : '이번 주 · '+CURRENT_WEEK+'주차';
-  document.getElementById('recWeekRange').textContent = rangeLabel(calWeek);
+  document.getElementById('recWeekRange').textContent = rangeLabel(calWeek)+' · '+closeLabel(calWeek);
   var doneDays={};
   if(state.membershipId){
     var cf=await db.from('certifications').select('created_at,capture_at')
@@ -1785,7 +1782,7 @@ async function renderRecords(){
               : weeks[k]==='fail'   ? '<span class="verify-tag bad">✗ 미달</span>'
               : weeks[k]==='exempt' ? '<span class="verify-tag gray">– 면제</span>'
               : '<span class="pill blue">진행 중</span>';
-    wr+='<div class="wk-result"><div><b style="font-size:14px;">'+(k+1)+'주차</b> <span class="mute2 small">'+rangeLabel(k+1)+'</span></div>'+badge+'</div>';
+    wr+='<div class="wk-result"><div><b style="font-size:14px;">'+(k+1)+'주차</b> <span class="mute2 small">'+rangeLabel(k+1)+' · '+closeLabel(k+1)+'</span></div>'+badge+'</div>';
   }
   document.getElementById('weekResults').innerHTML = wr || '<div class="wk-result"><span class="mute2 small">아직 기록이 없어요</span></div>';
 }
