@@ -768,7 +768,7 @@ function nickToEmail(nick){
 
 /* ──────── 달력 동기화 ──────── */
 var DAY_SHIFT_MS = 3*3600*1000;             // 하루 경계 = 새벽 3시 (밤샘 운동 배려: 02:59까지는 전날로 판정)
-var WEEK_CLOSE_MS = 12*3600*1000;           // 주차 마감 = 월요일 정오 12시 (일요일 밤 인증 승인 유예)
+var WEEK_CLOSE_MS = 8*3600*1000;            // 주차 마감 = 월요일 오전 8시 (일요일 밤 인증 승인 유예)
 var NOW = new Date();
 var TODAY = new Date(Date.now() - DAY_SHIFT_MS);   // '오늘'(새벽 3시 기준 — 3시간 당긴 시각)
 var SEASON_START = new Date(2026,4,11);     // 시즌 시작일 (방장이 설정) ※ month 0-index
@@ -784,7 +784,7 @@ function computeCurrentWeek(){
 /* 현재 시각·주차 새로고침 — TODAY는 로드시 스냅샷이라, 경계(3시/주차)를 넘긴 채
    앱을 켜둔 경우를 대비해 홈 진입·제출 시점에 다시 계산해 stale 방지 */
 function refreshNow(){ NOW = new Date(); TODAY = new Date(Date.now() - DAY_SHIFT_MS); CURRENT_WEEK = computeCurrentWeek(); }
-/* 각 주차 마감 시각(exclusive) — 주차 시작일 기준 다음 월요일 정오 */
+/* 각 주차 마감 시각(exclusive) — 주차 시작일 기준 다음 월요일 오전 8시 */
 function weekCloseExclusive(wk){ var d=new Date(SEASON_START); d.setDate(d.getDate()+wk*7); d.setTime(d.getTime()+WEEK_CLOSE_MS); return d; }
 /* 시즌 종료 시각(exclusive) — 마지막 주 마감 월요일 정오 */
 function seasonEndExclusive(){ return weekCloseExclusive(TOTAL_WEEKS); }
@@ -808,7 +808,7 @@ function weekRange(wk){
 }
 function fmtMD(d){ return (d.getMonth()+1)+'.'+d.getDate(); }
 function rangeLabel(wk){ var r=weekRange(wk); return fmtMD(r.s)+'~'+fmtMD(r.e); }
-function closeLabel(wk){ var d=weekCloseExclusive(wk); return fmtMD(d)+' 12:00 마감'; }
+function closeLabel(wk){ var d=weekCloseExclusive(wk); return fmtMD(d)+' 08:00 마감'; }
 function inWeek(date, wk){
   var start = wk===1 ? new Date(SEASON_START) : weekCloseExclusive(wk-1);
   var end = weekCloseExclusive(wk);
