@@ -1402,7 +1402,7 @@ async function loadFeed(){
     db.from('certifications')
       .select('id,week_no,memo,photo_type,photo_url,capture_at,status,approvals,created_at, memberships!inner(group_id,profile_id,profiles(nickname))')
       .eq('memberships.group_id', state.groupId)
-      .order('created_at',{ascending:false}).limit(50),
+      .order('created_at',{ascending:false}).limit(1000),   // 시즌 전체 커버(완료 탭 주차별 히스토리)
     db.from('certification_approvals').select('certification_id').eq('approver_id', state.myUid)
   ]);
   var cf=both[0], mine=both[1];
