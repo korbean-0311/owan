@@ -1333,13 +1333,19 @@ function pathFromUrl(url){
   var p=url.split('/certs/')[1];
   return p ? decodeURIComponent(p.split('?')[0]) : null;
 }
+var certifying=false;   // 인증 제출 진행중 플래그 (동시 중복 제출 차단)
 async function submitCertify(){
+  if(certifying) return;   // 이미 제출 처리 중이면 무시 (더블탭·중복 이벤트)
   if(!state.membershipId){ toast('로그인이 필요해요'); return; }
   refreshNow();   // 제출 순간의 실제 주차로 (앱 켜둔 채 경계 넘긴 경우 대비)
   if(CURRENT_WEEK<1){ toast('아직 시즌이 시작되지 않았어요. '+fmtStartLabel(SEASON_START)+'부터 인증할 수 있어요.'); return; }
   var tgt = state.leverageActive ? state.goal*2 : state.goal;
   if(state.done >= tgt){ toast('이번 주 목표를 이미 다 채웠어요! 🎉'); go('certify'); return; }
   if(!selectedFile){ toast('운동 사진을 올려주세요'); return; }
+  certifying=true;   // 여기서부터 락 (아래 어떤 경로로 return/throw 돼도 finally에서 해제)
+  var _sbtn=document.getElementById('submitCertify');
+  if(_sbtn){ _sbtn.disabled=true; _sbtn.textContent='업로드 중…'; }
+  try{
   // 같은 사진 중복 업로드 방지 — 같은 촬영시각(메타데이터)이면 같은 사진으로 간주
   if(captureAt){
     var dup=await db.from('certifications').select('id')
@@ -1375,6 +1381,12 @@ async function submitCertify(){
   document.getElementById('photoCam').value=''; document.getElementById('photoGal').value='';
   await refreshGroup(); await refreshFeed();
   setTimeout(function(){ go('home'); }, 700);
+  } catch(e){
+    toast('인증 처리 중 오류: '+((e&&e.message)||e));
+  } finally {
+    certifying=false;
+    if(_sbtn){ _sbtn.disabled=false; _sbtn.textContent='인증 요청 보내기'; }
+  }
 }
 /* 인증 피드 링크를 카톡 등으로 공유 (Web Share API, 반자동) */
 async function shareCertification(certId){
