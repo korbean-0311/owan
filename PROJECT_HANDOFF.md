@@ -24,7 +24,11 @@
 - **하루 경계 = 새벽 3시**(밤샘 운동 배려): `DAY_SHIFT_MS=3h`. 날짜 달력 표시는 `TODAY=now-3h` 기준.
 - **주차 마감 = 월요일 오전 8시**: `WEEK_CLOSE_MS=8h`. `computeCurrentWeek()`와 `inWeek()`는 각 주차를 다음 월요일 08:00까지 열어둔다. 일요일 밤 인증이 월요일 이른 오전에 승인돼도 지난 주차로 집계되도록 하기 위함. (집계는 여전히 제출 시간/승인 상태 기준)
 - **시즌 시작 전(오늘 < season_start) = "대기"(0주차)**: `computeCurrentWeek()`가 0 반환(하한 0). 홈은 D-day 카운트다운("D-5 · 시즌 시작 대기"), **인증·레버리지 차단**, 피드/랭킹/멤버는 "시작 대기" 문구. 대기 판정은 전부 `CURRENT_WEEK<1` 단일 기준. (`daysUntil()`/`fmtStartLabel()` 헬퍼)
-- 시즌 시작 시 **주당 목표 3/4/5회** 선택, **시즌 중 변경 불가**(목표 변경 기능 없음).
+- 시즌 시작 시 **주당 목표 3/4/5회** 선택, **시즌 중 변경 불가**. 단 **1주차에 한해 1회** 아래 "시즌 설정 확정" 모달에서 바꿀 수 있음.
+- **시즌 설정 확정(1주차·시즌당 1회)**: 시즌 시작 후 첫 접속 시 전체화면 모달(`#seasonSetup`)이 뜸 → 1단계 `이대로 갈래요`/`변경할래요`, 2단계에서 **닉네임·주당 횟수**를 각자 본인의 현재 값이 채워진 상태로 수정 → `확인`. 닫는 길은 이 버튼들뿐(X·배경탭 없음)이고, **버튼을 누르기 전엔 소진되지 않음**(앱을 그냥 닫으면 다음 접속에 다시 뜸). 한 번 누르면 그 시즌 내내 어디에도 안 뜸 — 재진입 버튼 없음.
+  - 반영 순서: **① `auth.updateUser({email})` → ② `profiles.nickname` → ③ `season_setup` RPC**(횟수+소진 도장). ①이 먼저인 이유 = 가입이 'Auth 계정 → 프로필' 순서라 프로필 없는 계정이 있을 수 있어 Auth 이메일 집합 ⊇ 프로필 닉네임 집합 → ①에서 중복이 걸리면 아무것도 안 바뀐 상태로 중단. ②가 실패하면 ①을 원래 이메일로 롤백. **③까지 성공해야 소진**(중간 실패는 기회를 까먹지 않음).
+  - 소진 기록은 `memberships.setup_season_no`(0=아직). **`groups.season_no`와 비교**하므로 새 시즌마다 자동으로 다시 열림 → `start_new_season` 수정 불필요. 온보딩 직후엔 `season_setup`을 선호출해 도장을 찍어 신규 가입자에겐 안 뜸.
+  - 1주차 계산이 틀어지지 않는 이유: `deriveSeason`이 `while(w<curWeek)`라 1주차엔 정산 루프가 한 번도 안 돎 → **목표/벌금 기준액을 바꿔도 소급 영향 0**.
 - 미달성 주차 벌금: 3회→3000 / 4회→2000 / 5회→1000원 (= base).
 - **연속 실패 누진**: **2주마다 2배** (배수 1,1,2,2,4,4…). `failMult(n)=2^⌊(n-1)/2⌋`. 성공하면 streak 리셋.
 - **개인 누적 벌금 상한 10만원**.
@@ -33,7 +37,9 @@
 - **인증**: 사진 업로드 → **멤버 3명 승인**해야 "완료"로 집계(홈/주차기록/벌금에 반영). 승인 전(대기)은 카운트 안 됨. 피드에서 바로 승인하지 않고, 인증 상세(사진 확대 뷰어)를 확인한 뒤 뷰어 안의 승인 버튼으로 승인.
 - **승인왕 순위**: 남의 인증에 "승인" 많이 눌러준 순위(`certification_approvals.approver_id` 집계, `loadApprovalRanking`). **3주마다(3·6·9·12…주차)** 홈에 카드 노출(`isApprovalWeek`: `CURRENT_WEEK%3===0`, 그 한 주만)(전원 표시 + 피드 유도 버튼, `renderApprovalCard`). 시즌 종료 정산 화면에도 전원 표시. 승인 기록은 시즌 리셋 시 삭제(시즌 단위).
 - **초대코드**: 그룹 공용 코드 + 정원. 방장이 재발급 가능. **새 그룹 만들기는 숨김**(온보딩 로고 5탭 또는 `?create`).
-- **로그인**: 닉네임+비밀번호. 닉네임을 `nickToEmail()`로 hex 인코딩한 이메일(`u<hex>@owan.co`)로 Supabase Auth. (한글 닉 지원 위함. ⚠️ Supabase에서 **Confirm email은 OFF 필수**, 최소 비번 6자.)
+- **로그인**: 닉네임+비밀번호. 닉네임을 `nickToEmail()`로 hex 인코딩한 이메일(`u<hex>@owan.co`)로 Supabase Auth. (한글 닉 지원 위함. ⚠️ Supabase에서 **Confirm email은 OFF 필수**(`mailer_autoconfirm=true` — 이게 켜져 있어야 닉네임 변경 시 이메일이 즉시 반영됨), 최소 비번 6자.)
+  - ⚠️ **닉네임 = 로그인 ID**. 바꾸려면 `profiles.nickname`만이 아니라 **Auth 이메일도 함께** 바꿔야 함(안 그러면 화면과 로그인 ID가 어긋남). `auth.updateUser({email})`는 **세션을 무효화하지 않음** → 로그아웃되지 않고 uid도 그대로라 기존 인증·사진·벌금 기록 전부 무사(사진 경로는 `group_id/membership_id/…`, 아바타 색은 `memberships.color`라 닉네임과 무관).
+  - ⚠️ `@owan.co`는 **가짜 도메인이라 비밀번호 찾기 메일이 갈 수 없음** → 닉네임을 잊고 기기를 바꾸면 복구 불가. 완화책으로 로그인 성공·닉네임 변경 시 `localStorage['owan_nick']`에 저장해 **로그인 화면 닉네임 칸을 자동 입력**(`rememberNick`/`prefillNick`).
 
 ## 5. 데이터 모델 (Supabase) — `supabase/schema.sql` 참조
 - `groups`: invite_code, capacity, season_no, season_start, total_weeks, created_by
@@ -73,7 +79,8 @@ splash(로딩) · onboard(초대코드→계정→목표 / 새그룹설정) · l
 
 ## 10. DB 변경 시 (마이그레이션)
 - 전체 초기화: `supabase/schema.sql` 재실행(drop&recreate — **데이터 전부 삭제**). 후 Auth→Users 정리.
-- 데이터 보존 변경: 별도 마이그레이션 SQL 작성(ALTER/CREATE OR REPLACE/UPDATE). 예: `supabase/migration_colors.sql`, `migration_colors2.sql`, `migration_storage_delete.sql`(certs 버킷 DELETE 정책 — 본인/방장만, 사진 파일 정리용), `migration_leverage3.sql`(레버리지 2→3, 전체 초기화 시엔 schema.sql에 이미 포함), `migration_leverage_precert.sql`(use_leverage RPC에 "이번 주 첫 인증 전에만" 가드 — CREATE OR REPLACE).
+- 데이터 보존 변경: 별도 마이그레이션 SQL 작성(ALTER/CREATE OR REPLACE/UPDATE). 예: `supabase/migration_colors.sql`, `migration_colors2.sql`, `migration_storage_delete.sql`(certs 버킷 DELETE 정책 — 본인/방장만, 사진 파일 정리용), `migration_leverage3.sql`(레버리지 2→3, 전체 초기화 시엔 schema.sql에 이미 포함), `migration_leverage_precert.sql`(use_leverage RPC에 "이번 주 첫 인증 전에만" 가드 — CREATE OR REPLACE), `migration_dedup_index.sql`(같은 촬영시각 중복 인증 정리 + 부분 유니크 인덱스), `migration_season_setup.sql`(`memberships.setup_season_no` 컬럼 + `season_setup` RPC — 1주차 설정 확정).
+- ⚠️ **SQL Editor는 선택 영역이 있으면 그 부분만 실행**된다. 여러 문장짜리 파일을 돌릴 땐 에디터를 비우고 통째로 붙여넣을 것 — 실제로 `migration_season_setup.sql`에서 ALTER만 적용되고 CREATE FUNCTION이 빠지는 일이 있었음. 적용 확인은 `select count(*) from pg_proc where proname='<함수명>';`.
 - publishable 키로는 DDL 불가 → **사용자가 SQL Editor에서 직접 실행**해야 함. 스키마 변경 시 프론트가 새 컬럼을 select하면 컬럼 생성 전엔 에러 → **마이그레이션 먼저, 배포 나중**.
 
 ## 11. 주요 한계/주의 (gotcha)
@@ -86,6 +93,7 @@ splash(로딩) · onboard(초대코드→계정→목표 / 새그룹설정) · l
 ## 12. 진행 상태 / 다음 후보
 - ✅ 완료: 전 기능 구현 + Supabase 연동 + PWA + GitHub Pages 배포 + 베타 피드백 다수 반영. 9명 베타테스트 중.
 - ✅ 최근(2026-06): 현재주차 면제 표시(링/시즌바/주차기록 일관), **시즌 시작 전 "대기(0주차)" 상태**(D-day, 인증·레버리지 차단, 피드/랭킹/멤버 문구 통일), **면제 복수 선택 + 사람별 병합 카드**(주차별 개별 해제).
+- ✅ 최근(2026-09): **시즌 2 시작**(9/14, 8주). **1주차 설정 확정 모달** — 접속 시 1회, 닉네임(Auth 이메일 동반 변경, 로그아웃 없음)·주당 횟수 변경. 로그인 닉네임 자동 입력(`owan_nick`).
 - 다음 후보(미구현): 카톡 실연동(현재 링크공유로 충분), 다중기기 실시간(Supabase Realtime), 시즌 종료 자동화(현재 방장 수동/derive), 알림(현재 없음), 코드 리팩토링(파일 분리).
 
 ## 13. 메모리
