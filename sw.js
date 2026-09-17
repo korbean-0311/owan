@@ -1,5 +1,5 @@
 /* 오운완 서비스워커 — 앱 셸 캐시 (오프라인/설치용) */
-const CACHE = 'owan-v1';
+const CACHE = 'owan-v2';   /* 앱 셸 갱신 시 버전을 올릴 것 — 오프라인 폴백용 index.html 이 낡지 않도록 */
 const SHELL = ['./index.html', './supabase-config.js', './icon.svg', './manifest.json'];
 
 self.addEventListener('install', function(e){
